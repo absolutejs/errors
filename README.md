@@ -1,49 +1,79 @@
 # `@absolutejs/errors`
 
-> Sentry-equivalent exception capture for the AbsoluteJS substrate.
+> Effect-native, Sentry-equivalent exception capture for the AbsoluteJS
+> substrate.
 
 `createErrorTracker` is a thin decorator over
-[`@absolutejs/audit`](https://www.npmjs.com/package/@absolutejs/audit) +
-[`@absolutejs/telemetry`](https://www.npmjs.com/package/@absolutejs/telemetry).
-`captureException(error, context?)` does five things in one shot:
+[`@absolutejs/audit`](https://www.npmjs.com/package/@absolutejs/audit),
+[`@absolutejs/telemetry`](https://www.npmjs.com/package/@absolutejs/telemetry),
+and a durable issue store. `capture(error, context?)` is an
+`Effect<CaptureOutcome, never>` — **capturing an error can never itself
+fail** — that does six things in one shot:
 
-1. Computes a stable **fingerprint** so the same error grouped from
-   different call sites collapses into one "issue."
-2. Records the exception on the **active OTel span**, when a tracer
-   is supplied.
-3. Emits an **audit event** (`kind: 'errors.captured'`) with the
-   fingerprint + structured context.
-4. Pushes the event onto an in-process **recent-errors LRU buffer**
-   so an admin endpoint or sandboxed REPL can inspect without going
-   through audit storage.
-5. Bumps per-fingerprint **metrics counters** for
-   `@absolutejs/metrics`.
+1. Computes a stable **fingerprint** so the same error from different
+   call sites collapses into one "issue."
+2. Records the exception on the **active OTel span**, when a tracer is
+   supplied.
+3. Emits an **audit event** (`kind: 'errors.captured'`).
+4. Upserts a grouped **issue** + appends the event to a durable
+   `store`, and fires `onIssue` on a new/regressed issue.
+5. Pushes onto an in-process **recent-errors LRU buffer**.
+6. Bumps per-fingerprint **metrics counters**.
 
-The package doesn't replace audit or telemetry — it composes onto
-them via narrow interfaces. No SDK lock-in, no third-party vendor.
+### Errors-as-values
+
+Every fan-out (audit / tracer / store / `onIssue`) is a trust boundary.
+Each is wrapped so its failure becomes a **typed, tagged value**
+(`Data.TaggedError`) collected into the outcome — never swallowed into an
+anonymous counter or an `onError(unknown)`. The outcome reports a per-sink
+delivery state (`'ok' | 'failed' | 'skipped'`), so a caller can react
+specifically — retry the store, page on audit loss, ignore a flaky
+`onIssue` — via an exhaustive `switch (failure._tag)`.
 
 ```ts
-import { createErrorTracker } from '@absolutejs/errors';
-import { broker } from '@absolutejs/audit/pg'; // your audit broker
-import { tracerOrNoop } from '@absolutejs/telemetry';
+import { Effect } from "effect";
+import { createErrorTracker, createMemoryIssueStore } from "@absolutejs/errors";
+import { tracerOrNoop } from "@absolutejs/telemetry";
 
 const errors = createErrorTracker({
-  audit: broker,
-  tracer: tracerOrNoop(otelProvider, 'app'),
+  audit: broker, // @absolutejs/audit
+  tracer: tracerOrNoop(otelProvider, "app"),
+  store: createMemoryIssueStore(), // or @absolutejs/errors-postgres
+  project: "acme",
   release: process.env.RELEASE,
-  environment: 'production'
+  environment: "production",
+  onIssue: (r) => alert(r.issue), // only on new / regression
 });
 
-try {
-  await chargeCustomer(orderId);
-} catch (e) {
-  const id = await errors.captureException(e, {
-    tenant: tenantId,
+// Effect API (primary):
+const outcome = await Effect.runPromise(
+  errors.capture(e, {
+    tenant,
     target: `order_${orderId}`,
-    tags: { component: 'billing' }
-  });
-  return new Response(`error ${id}`, { status: 500 });
+    tags: { component: "billing" },
+  }),
+);
+
+// Promise edge (for Promise-world consumers) — identical outcome:
+const out = await errors.captureException(e);
+
+if (out.failures.length > 0) {
+  for (const f of out.failures) {
+    switch (f._tag) {
+      case "StoreFailure":
+        retryLater(f.cause);
+        break; // f.cause: IssueStoreError
+      case "AuditSinkFailure":
+        page("audit lost", f.cause);
+        break;
+      case "TracerFailure":
+      case "OnIssueFailure":
+      case "FingerprintFailure":
+        /* tolerate */ break;
+    }
+  }
 }
+return new Response(`error ${out.fingerprint}`, { status: 500 });
 ```
 
 ## API
@@ -51,26 +81,94 @@ try {
 ```ts
 createErrorTracker(options?: {
   audit?: { append: (event) => Promise<void> | void };
-  tracer?: { startSpan?: (name: string) => Span };
+  tracer?: { startSpan?: (name) => Span };
+  store?: IssueStore;          // durable "Issues" surface
+  project?: string;            // default 'default'
+  onIssue?: (r: IssueUpsertResult) => void | Promise<void>;  // new/regression only
   release?: string;
   environment?: string;
   fingerprint?: (error: Error, context: ErrorContext) => string | Promise<string>;
   maxRecent?: number;          // default 100
   maxFingerprints?: number;    // default 1000
   clock?: () => number;
-  onError?: (e: unknown) => void;
 }) => ErrorTracker
 ```
 
 ```ts
-captureException(error: unknown, context?: ErrorContext) => Promise<fingerprint>
-recentErrors() => ReadonlyArray<CapturedError>
-clearRecent() => void
-metrics() => { captured, captureErrors, byFingerprint }
+capture(error, context?)          => Effect<CaptureOutcome, never>   // primary
+captureException(error, context?) => Promise<CaptureOutcome>         // Promise edge
+recentErrors()                    => ReadonlyArray<CapturedError>
+clearRecent()                     => void
+metrics()                         => { captured, captureErrors, byFingerprint }
+
+type CaptureOutcome = {
+  fingerprint: string;
+  delivered: Record<'fingerprint'|'audit'|'tracer'|'store'|'onIssue', 'ok'|'failed'|'skipped'>;
+  issue?: IssueUpsertResult;          // present iff the store delivered
+  failures: CaptureFailure[];         // typed, tagged; empty ⇒ fully delivered
+};
 ```
 
 `ErrorContext` carries the standard Sentry-style triage envelope:
-`tenant`, `target`, `traceId`, `spanId`, `tags`, `extra`, `level`.
+`tenant`, `target`, `traceId`, `spanId`, `replayId`, `tags`, `extra`,
+`level`.
+
+## Durable issues (the "Issues" surface)
+
+The in-process buffer is for triage; for a persistent, queryable
+**Issues** product (first-seen / last-seen / occurrence count / state /
+assignee / regression detection) pass a `store`:
+
+```ts
+import { createErrorTracker, createMemoryIssueStore } from "@absolutejs/errors";
+// or, for durability:
+// import { createPostgresIssueStore } from '@absolutejs/errors-postgres';
+
+const errors = createErrorTracker({
+  project: "acme",
+  release: process.env.RELEASE,
+  store: createMemoryIssueStore(), // swap for the Postgres adapter
+  onIssue: (r) => {
+    // fires ONLY on new / regression
+    if (r.isNew || r.isRegression) alert(r.issue); // → @absolutejs/dispatch
+  },
+});
+```
+
+Every capture upserts a grouped issue (keyed by `(project, fingerprint)`)
+and appends the event. `onIssue` fires only on the transitions worth
+paging someone for — a **new** issue or a **regression** (a `resolved`
+issue seen again, which flips back to `unresolved`). A `resolved` issue's
+severity escalates but never de-escalates; `ignored` issues stay muted.
+
+Store writes are best-effort: a store outage surfaces as a typed
+`StoreFailure` in `outcome.failures` (wrapping the adapter's
+`IssueStoreError`), increments `captureErrors`, and never breaks capture.
+
+Adapters are **Effect-native** — every method returns an `Effect` with a
+typed `IssueStoreError` channel (`IssueStoreSchemaError` /
+`IssueStoreQueryError` / `IssueStoreSerializationError`):
+
+```ts
+type IssueStore = {
+  record: (event: StoredEvent) => Effect<IssueUpsertResult, IssueStoreError>;  // required
+  listIssues?: (filter?) => Effect<IssueRecord[], IssueStoreError>;            // dashboard
+  getIssue?:  (project, fingerprint) => Effect<Option<IssueRecord>, IssueStoreError>;
+  setState?:  (project, fingerprint, 'unresolved'|'resolved'|'ignored') => Effect<void, IssueStoreError>;
+  assign?:    (project, fingerprint, assignee | null) => Effect<void, IssueStoreError>;
+  listEvents?:(project, fingerprint, limit?) => Effect<StoredEvent[], IssueStoreError>;
+};
+```
+
+`createMemoryIssueStore()` is the zero-failure reference implementation
+(use for dev / tests / single-process); `@absolutejs/errors-postgres`
+is the durable adapter — both honor identical semantics.
+
+`StoredEvent` carries `traceId` / `spanId` (→ `@absolutejs/telemetry`)
+and `replayId` (→ `@absolutejs/replay`) so the dashboard can cross-link
+an issue to its exact trace and DOM replay. `issueTitle()` / `issueCulprit()`
+are exported so store adapters derive the issue row without reaching into
+internals.
 
 ## Fingerprinting
 

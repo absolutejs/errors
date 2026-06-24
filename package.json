@@ -1,7 +1,7 @@
 {
   "name": "@absolutejs/errors",
-  "version": "0.1.0",
-  "description": "Sentry-equivalent exception capture for the AbsoluteJS substrate. createErrorTracker decorates @absolutejs/audit + @absolutejs/telemetry: captureException(error, context?) emits to audit, records on the active span, computes a stable fingerprint, and keeps an in-process recent-errors buffer. No vendor lock-in; the substrate owns the audit surface.",
+  "version": "0.3.0",
+  "description": "Effect-native, Sentry-equivalent exception capture for the AbsoluteJS substrate. createErrorTracker decorates @absolutejs/audit + @absolutejs/telemetry + a durable issue store; capture() returns a CaptureOutcome with per-sink delivery state + typed (Data.TaggedError) failures — errors-as-values. Plus /ingest (coalescing buffer + Schema-validated endpoint + drainer for browser beacon payloads) and /symbolicate (source-map stack rewriting). No vendor lock-in.",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/absolutejs/errors.git"
@@ -21,26 +21,65 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js",
       "default": "./dist/index.js"
+    },
+    "./ingest": {
+      "types": "./dist/ingest.d.ts",
+      "import": "./dist/ingest.js",
+      "default": "./dist/ingest.js"
+    },
+    "./symbolicate": {
+      "types": "./dist/symbolicate.d.ts",
+      "import": "./dist/symbolicate.js",
+      "default": "./dist/symbolicate.js"
     }
   },
   "publishConfig": {
     "access": "public"
   },
-  "files": ["dist", "README.md"],
+  "files": [
+    "dist",
+    "README.md"
+  ],
   "scripts": {
-    "build": "rm -rf dist && bun build src/index.ts --outdir dist --sourcemap --target=bun && tsc --project tsconfig.build.json",
+    "build": "rm -rf dist && bun build src/index.ts src/ingest.ts src/symbolicate.ts --outdir dist --sourcemap --target=bun --external effect --external @jridgewell/trace-mapping --external elysia && tsc --project tsconfig.build.json",
     "test": "bun test tests/",
     "typecheck": "tsc --noEmit",
     "format": "prettier --write \"./**/*.{ts,json,md}\"",
     "check:package": "bun run typecheck && bun run build && bun run test",
     "release": "bun run format && bun run check:package && bun publish"
   },
-  "keywords": ["absolutejs", "errors", "exceptions", "sentry", "tracking", "audit", "telemetry"],
+  "keywords": [
+    "absolutejs",
+    "errors",
+    "exceptions",
+    "sentry",
+    "tracking",
+    "audit",
+    "telemetry",
+    "effect",
+    "effect-ts",
+    "issues",
+    "observability"
+  ],
   "peerDependencies": {
-    "bun-types": "^1.3.14"
+    "@jridgewell/trace-mapping": "^0.3.0",
+    "bun-types": "^1.3.14",
+    "effect": "^3.21.0",
+    "elysia": ">= 1.4.0"
+  },
+  "peerDependenciesMeta": {
+    "@jridgewell/trace-mapping": {
+      "optional": true
+    },
+    "elysia": {
+      "optional": true
+    }
   },
   "devDependencies": {
+    "@jridgewell/trace-mapping": "^0.3.31",
     "@types/bun": "^1.3.14",
+    "effect": "^3.21.4",
+    "elysia": "^1.4.0",
     "prettier": "^3.8.3",
     "typescript": "^5.9.0"
   }
