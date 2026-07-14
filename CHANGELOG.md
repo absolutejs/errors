@@ -1,5 +1,12 @@
 # @absolutejs/errors changelog
 
+## 0.3.3 — 2026-07-14
+
+- The ingest drainer now applies `prepare()` to both sampled events and the
+  representative event used for issue title, culprit, and release metadata.
+  Redaction and symbolication therefore cannot diverge between issue rows and
+  their event timelines.
+
 ## 0.3.2 — 2026-07-14
 
 - `ingestPlugin()` now registers an Elysia `onStop` hook that stops its

@@ -263,19 +263,25 @@ describe("createDrainer", () => {
     await drainer.stop();
   });
 
-  test("prepare() hook (symbolication stand-in) rewrites sample stacks", async () => {
+  test("prepare() rewrites both stored samples and the issue representative", async () => {
     const store = createMemoryIssueStore();
     const buffer = createInMemoryEventBuffer();
     const drainer = createDrainer({
       buffer,
       intervalMs: 1_000_000,
-      prepare: (event) => Effect.succeed({ ...event, stack: "SYMBOLICATED" }),
+      prepare: (event) =>
+        Effect.succeed({ ...event, message: "sanitized", stack: "SYMBOLICATED" }),
       store,
     });
     buffer.push(ev({ stack: "minified" }));
     await Effect.runPromise(drainer.flush());
     const events = await Effect.runPromise(store.listEvents!("acme", "fp-1"));
     expect(events[0]?.stack).toBe("SYMBOLICATED");
+    expect(events[0]?.message).toBe("sanitized");
+    const issues = await Effect.runPromise(
+      store.listIssues!({ project: "acme" }),
+    );
+    expect(issues[0]?.title).toContain("sanitized");
     await drainer.stop();
   });
 
