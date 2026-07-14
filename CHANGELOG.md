@@ -1,5 +1,12 @@
 # @absolutejs/errors changelog
 
+## 0.3.2 — 2026-07-14
+
+- `ingestPlugin()` now registers an Elysia `onStop` hook that stops its
+  background drainer and performs the documented final buffer flush.
+- Custom Elysia-like factories without an `onStop` surface remain supported.
+- No caller API changes.
+
 ## 0.1.0 — 2026-05-31
 
 Initial release. Closes the second half of G12 from the second-pass
