@@ -61,7 +61,7 @@ const settings = Type.Object({
 });
 
 export const manifest = defineManifest<ErrorTrackerOptions, ErrorTracker>()({
-  contract: 1,
+  contract: 2,
   identity: {
     accent: "#ef4444",
     category: "observability",
@@ -133,6 +133,13 @@ export const manifest = defineManifest<ErrorTrackerOptions, ErrorTracker>()({
   tools: {
     error_detail: tool.runtime({
       annotations: { readOnlyHint: true },
+      authorization: {
+        approval: "never",
+        audience: "admin",
+        effects: ["read"],
+        requiredScopes: ["errors:read"],
+        resource: { idField: "fingerprint", type: "error-issue" },
+      },
       description:
         "Full detail (stack trace, tags, context) for the most recent capture of one fingerprint, from the in-process buffer.",
       handler: ({ fingerprint }, tracker) => {
@@ -148,6 +155,12 @@ export const manifest = defineManifest<ErrorTrackerOptions, ErrorTracker>()({
     }),
     error_stats: tool.runtime({
       annotations: { readOnlyHint: true },
+      authorization: {
+        approval: "never",
+        audience: "admin",
+        effects: ["read"],
+        requiredScopes: ["errors:read"],
+      },
       description:
         "Capture counters since the server started: total captures, per-sink failures, and occurrence counts per error fingerprint.",
       handler: (_input, tracker) => JSON.stringify(tracker.metrics()),
@@ -155,6 +168,12 @@ export const manifest = defineManifest<ErrorTrackerOptions, ErrorTracker>()({
     }),
     list_recent_errors: tool.runtime({
       annotations: { readOnlyHint: true },
+      authorization: {
+        approval: "never",
+        audience: "admin",
+        effects: ["read"],
+        requiredScopes: ["errors:read"],
+      },
       description:
         "List the most recently captured errors (newest first): fingerprint, name, message, level, and when. Use error_detail for the stack trace.",
       handler: ({ limit }, tracker) => {
