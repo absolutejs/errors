@@ -1,5 +1,13 @@
 # @absolutejs/errors changelog
 
+## 0.3.5 — 2026-07-23
+
+- Browser-ingest fingerprints are recomputed after `prepare()` so source-mapped
+  frames, rather than release-specific minified chunks, drive durable grouping.
+- Raw groups that canonicalize to the same project and fingerprint are merged
+  before persistence, preserving counts, severity, latest release, bounded
+  samples, and a single new/regression alert.
+
 ## 0.3.4 — 2026-07-23
 
 - Server-side captures now preserve nested `Error.cause` stacks and structured

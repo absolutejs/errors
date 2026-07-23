@@ -25,6 +25,10 @@ structured `extra.errorCauses` entries, including driver fields such as database
 error codes, severity, detail, and routine. The outer error continues to drive
 fingerprinting so causes add diagnosis without collapsing distinct operations.
 
+Browser ingest recomputes its canonical fingerprint after the optional
+`prepare()` step. Source-mapped copies of the same failure therefore group
+together across releases even when their raw content-hashed chunk names differ.
+
 ### Errors-as-values
 
 Every fan-out (audit / tracer / store / `onIssue`) is a trust boundary.

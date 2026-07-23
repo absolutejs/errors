@@ -279,13 +279,75 @@ describe("createDrainer", () => {
     });
     buffer.push(ev({ stack: "minified" }));
     await Effect.runPromise(drainer.flush());
-    const events = await Effect.runPromise(store.listEvents!("acme", "fp-1"));
-    expect(events[0]?.stack).toBe("SYMBOLICATED");
-    expect(events[0]?.message).toBe("sanitized");
     const issues = await Effect.runPromise(
       store.listIssues!({ project: "acme" }),
     );
+    const events = await Effect.runPromise(
+      store.listEvents!("acme", issues[0]!.fingerprint),
+    );
+    expect(events[0]?.stack).toBe("SYMBOLICATED");
+    expect(events[0]?.message).toBe("sanitized");
     expect(issues[0]?.title).toContain("sanitized");
+    await drainer.stop();
+  });
+
+  test("regroups release-specific raw fingerprints after symbolication", async () => {
+    const store = createMemoryIssueStore();
+    const buffer = createInMemoryEventBuffer();
+    let alerts = 0;
+    const drainer = createDrainer({
+      buffer,
+      intervalMs: 1_000_000,
+      onIssue: () => {
+        alerts += 1;
+      },
+      prepare: (event) =>
+        Effect.succeed({
+          ...event,
+          stack:
+            "WebMcpUnavailableError: unavailable\n    at createRegistry (../node_modules/@absolutejs/webmcp/src/index.ts:102:11)",
+        }),
+      store,
+    });
+    buffer.push(
+      ev({
+        at: 1000,
+        fingerprint: "raw-release-a",
+        message: "WebMCP is unavailable",
+        name: "WebMcpUnavailableError",
+        release: "release-a",
+        stack:
+          "WebMcpUnavailableError: unavailable\n    at C (chunk-a1b2.js:2:3385)",
+      }),
+    );
+    buffer.push(
+      ev({
+        at: 2000,
+        fingerprint: "raw-release-b",
+        message: "WebMCP is unavailable",
+        name: "WebMcpUnavailableError",
+        release: "release-b",
+        stack:
+          "WebMcpUnavailableError: unavailable\n    at C (chunk-c3d4.js:2:3385)",
+      }),
+    );
+
+    const result = await Effect.runPromise(drainer.flush());
+    const issues = await Effect.runPromise(
+      store.listIssues!({ project: "acme" }),
+    );
+    expect(result.groups).toBe(1);
+    expect(result.occurrences).toBe(2);
+    expect(issues).toHaveLength(1);
+    expect(issues[0]?.timesSeen).toBe(2);
+    expect(issues[0]?.lastRelease).toBe("release-b");
+    expect(alerts).toBe(1);
+    const events = await Effect.runPromise(
+      store.listEvents!("acme", issues[0]!.fingerprint),
+    );
+    expect(events).toHaveLength(2);
+    expect(new Set(events.map((event) => event.fingerprint)).size).toBe(1);
+    expect(events[0]?.stack).toContain("@absolutejs/webmcp/src/index.ts");
     await drainer.stop();
   });
 
