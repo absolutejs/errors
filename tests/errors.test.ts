@@ -446,9 +446,12 @@ describe("metrics", () => {
 // =============================================================================
 
 describe("issueTitle / issueCulprit", () => {
-  test("title is `name: normalized-message`, digits stripped", () => {
+  test("title removes quoted values without stripping meaningful digits", () => {
     expect(issueTitle("TypeError", "user 'u_42' not found")).toBe(
       "TypeError: user '?' not found",
+    );
+    expect(issueTitle("Error", "Server error response (5xx)")).toBe(
+      "Error: Server error response (5xx)",
     );
   });
 

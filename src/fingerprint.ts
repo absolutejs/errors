@@ -24,17 +24,18 @@ const firstStackFrame = (stack: string | undefined): string => {
 
 const normalizeMessage = (message: string): string =>
   stripQuoted(stripDigits(message)).slice(0, 200);
+const displayMessage = (message: string): string =>
+  stripQuoted(message).slice(0, 200);
 
 /**
- * Derive an issue title from a `(name, message)`. Stable across occurrences
- * (digits/quoted-literals normalized away). Exported so store adapters can
- * compute the issue row without reaching into errors' internals.
+ * Derive a human-readable issue title from a `(name, message)`. Quoted values
+ * are removed for privacy, but meaningful digits such as HTTP status classes
+ * remain visible. Fingerprint normalization is deliberately separate below.
+ * Exported so store adapters can compute the issue row without reaching into
+ * errors' internals.
  */
 export const issueTitle = (name: string, message: string): string =>
-  (message === "" ? name : `${name}: ${normalizeMessage(message)}`).slice(
-    0,
-    300,
-  );
+  (message === "" ? name : `${name}: ${displayMessage(message)}`).slice(0, 300);
 
 /** Derive an issue culprit (top user stack frame) from a stack trace. */
 export const issueCulprit = (stack: string | undefined): string =>
