@@ -20,6 +20,11 @@ fail** — that does six things in one shot:
 5. Pushes onto an in-process **recent-errors LRU buffer**.
 6. Bumps per-fingerprint **metrics counters**.
 
+Nested `Error.cause` chains are appended to the stored stack and preserved as
+structured `extra.errorCauses` entries, including driver fields such as database
+error codes, severity, detail, and routine. The outer error continues to drive
+fingerprinting so causes add diagnosis without collapsing distinct operations.
+
 ### Errors-as-values
 
 Every fan-out (audit / tracer / store / `onIssue`) is a trust boundary.

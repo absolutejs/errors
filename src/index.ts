@@ -433,18 +433,161 @@ const defaultFingerprint = (
 // Coerce arbitrary `unknown` into an Error
 // =============================================================================
 
+/** One serializable link in an `Error.cause` chain. */
+export type CapturedErrorCause = {
+  name: string;
+  message: string;
+  stack?: string;
+  /** Driver/runtime diagnostics such as PostgreSQL code, detail, and routine. */
+  properties?: Record<string, unknown>;
+};
+
+const ERROR_STANDARD_PROPERTIES = new Set([
+  "cause",
+  "message",
+  "name",
+  "stack",
+]);
+const MAX_ERROR_CAUSE_DEPTH = 16;
+const MAX_ERROR_PROPERTY_DEPTH = 5;
+
+const safeStringify = (value: unknown): string => {
+  try {
+    return JSON.stringify(value) ?? String(value);
+  } catch {
+    try {
+      return String(value);
+    } catch {
+      return "Unserializable error value";
+    }
+  }
+};
+
+const safeProperty = (value: object, key: PropertyKey): unknown => {
+  try {
+    return Reflect.get(value, key);
+  } catch {
+    return undefined;
+  }
+};
+
 const toError = (value: unknown): Error => {
   if (value instanceof Error) return value;
   if (typeof value === "string") return new Error(value);
   if (typeof value === "object" && value !== null) {
-    const obj = value as { message?: unknown; name?: unknown };
+    const messageValue = safeProperty(value, "message");
     const message =
-      typeof obj.message === "string" ? obj.message : JSON.stringify(value);
+      typeof messageValue === "string" ? messageValue : safeStringify(value);
     const wrapped = new Error(message);
-    if (typeof obj.name === "string") wrapped.name = obj.name;
+    const name = safeProperty(value, "name");
+    if (typeof name === "string") wrapped.name = name;
+    const stack = safeProperty(value, "stack");
+    if (typeof stack === "string") wrapped.stack = stack;
+    const cause = safeProperty(value, "cause");
+    if (cause !== undefined) wrapped.cause = cause;
     return wrapped;
   }
   return new Error(String(value));
+};
+
+const safePropertyValue = (
+  value: unknown,
+  seen: Set<unknown>,
+  depth = 0,
+): unknown => {
+  if (value === null || typeof value === "string" || typeof value === "boolean")
+    return value;
+  if (typeof value === "number")
+    return Number.isFinite(value) ? value : String(value);
+  if (typeof value === "bigint" || typeof value === "symbol")
+    return String(value);
+  if (typeof value === "undefined") return "undefined";
+  if (typeof value === "function")
+    return `[Function ${value.name || "anonymous"}]`;
+  if (depth >= MAX_ERROR_PROPERTY_DEPTH) return "[Truncated]";
+  if (seen.has(value)) return "[Circular]";
+  seen.add(value);
+  try {
+    if (Array.isArray(value))
+      return value.map((item) => safePropertyValue(item, seen, depth + 1));
+    const out: Record<string, unknown> = {};
+    for (const key of Object.keys(value)) {
+      const property = safeProperty(value, key);
+      out[key] = safePropertyValue(property, seen, depth + 1);
+    }
+    return out;
+  } finally {
+    seen.delete(value);
+  }
+};
+
+const errorProperties = (
+  value: unknown,
+): Record<string, unknown> | undefined => {
+  if (typeof value !== "object" || value === null) return undefined;
+  const out: Record<string, unknown> = {};
+  let propertyNames: string[];
+  try {
+    propertyNames = Object.getOwnPropertyNames(value);
+  } catch {
+    return undefined;
+  }
+  for (const key of propertyNames) {
+    if (ERROR_STANDARD_PROPERTIES.has(key)) continue;
+    out[key] = safePropertyValue(
+      safeProperty(value, key),
+      new Set<unknown>([value]),
+    );
+  }
+  return Object.keys(out).length > 0 ? out : undefined;
+};
+
+const errorCause = (value: unknown): unknown => {
+  if (typeof value !== "object" || value === null) return undefined;
+  return safeProperty(value, "cause");
+};
+
+const captureErrorCauses = (error: Error): CapturedErrorCause[] => {
+  const causes: CapturedErrorCause[] = [];
+  const seen = new Set<unknown>([error]);
+  let cause = errorCause(error);
+  while (cause !== undefined && causes.length < MAX_ERROR_CAUSE_DEPTH) {
+    if (seen.has(cause)) {
+      causes.push({
+        message: "Cause chain references an earlier error",
+        name: "CircularErrorCause",
+      });
+      return causes;
+    }
+    if (typeof cause === "object" && cause !== null) seen.add(cause);
+    const resolved = toError(cause);
+    const captured: CapturedErrorCause = {
+      message: resolved.message,
+      name: resolved.name,
+    };
+    if (resolved.stack !== undefined) captured.stack = resolved.stack;
+    const properties = errorProperties(cause);
+    if (properties !== undefined) captured.properties = properties;
+    causes.push(captured);
+    cause = errorCause(cause);
+  }
+  if (cause !== undefined)
+    causes.push({
+      message: `Cause chain exceeded ${MAX_ERROR_CAUSE_DEPTH} levels`,
+      name: "TruncatedErrorCause",
+    });
+  return causes;
+};
+
+const stackWithCauses = (
+  stack: string | undefined,
+  causes: CapturedErrorCause[],
+): string | undefined => {
+  if (causes.length === 0) return stack;
+  const sections = causes.map(
+    (cause) => `Caused by: ${cause.stack ?? `${cause.name}: ${cause.message}`}`,
+  );
+  return [stack, ...sections].filter((part) => part !== undefined).join("\n");
 };
 
 // =============================================================================
@@ -568,6 +711,14 @@ export const createErrorTracker = (
   ): Effect.Effect<CaptureOutcome> =>
     Effect.gen(function* () {
       const error = toError(raw);
+      const errorCauses = captureErrorCauses(error);
+      const enrichedContext: ErrorContext =
+        errorCauses.length === 0
+          ? context
+          : {
+              ...context,
+              extra: { ...context.extra, errorCauses },
+            };
       const delivered: Record<SinkName, Delivery> = {
         audit: "skipped",
         fingerprint: "ok",
@@ -600,12 +751,13 @@ export const createErrorTracker = (
 
       const event: CapturedError = {
         at: clock(),
-        context,
+        context: enrichedContext,
         fingerprint,
         message: error.message,
         name: error.name,
       };
-      if (error.stack !== undefined) event.stack = error.stack;
+      const stack = stackWithCauses(error.stack, errorCauses);
+      if (stack !== undefined) event.stack = stack;
       if (options.release !== undefined) event.release = options.release;
       if (options.environment !== undefined) {
         event.environment = options.environment;
@@ -621,7 +773,7 @@ export const createErrorTracker = (
         const traced = yield* Effect.either(
           Effect.try({
             catch: (cause) => new TracerFailure({ cause }),
-            try: () => doTrace(error, context),
+            try: () => doTrace(error, enrichedContext),
           }),
         );
         if (Either.isRight(traced)) delivered.tracer = "ok";

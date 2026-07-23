@@ -1,5 +1,13 @@
 # @absolutejs/errors changelog
 
+## 0.3.4 — 2026-07-23
+
+- Server-side captures now preserve nested `Error.cause` stacks and structured
+  diagnostic properties in `extra.errorCauses`.
+- Cross-realm errors retain their original stack and cause chain.
+- Cause serialization is cycle-safe and bounded, while the outer error remains
+  the fingerprint source so distinct failed operations do not collapse together.
+
 ## 0.3.3 — 2026-07-14
 
 - The ingest drainer now applies `prepare()` to both sampled events and the

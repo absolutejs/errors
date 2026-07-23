@@ -133,6 +133,98 @@ describe("capture — basics", () => {
     expect(tracker.metrics().captured).toBe(3);
   });
 
+  test("preserves nested causes and driver diagnostics without changing wrapper grouping", async () => {
+    const store = createMemoryIssueStore();
+    const tracker = createErrorTracker({ project: "dealroom", store });
+    const postgresError = Object.assign(new Error("write CONNECTION_CLOSED"), {
+      code: "57P01",
+      detail: "server closed the connection unexpectedly",
+      routine: "ProcessInterrupts",
+      severity: "FATAL",
+    });
+    const queryError = new Error("Failed query: update queue_jobs", {
+      cause: postgresError,
+    });
+    queryError.name = "DrizzleQueryError";
+    queryError.stack =
+      "DrizzleQueryError: Failed query: update queue_jobs\n    at reapStuck (store.ts:10:2)";
+
+    const first = await tracker.captureException(queryError, {
+      extra: { operation: "reapStuck" },
+    });
+    const sameWrapperDifferentCause = new Error(
+      "Failed query: update queue_jobs",
+      { cause: new Error("timeout") },
+    );
+    sameWrapperDifferentCause.name = "DrizzleQueryError";
+    sameWrapperDifferentCause.stack = queryError.stack;
+    const second = await tracker.captureException(sameWrapperDifferentCause);
+
+    expect(second.fingerprint).toBe(first.fingerprint);
+    const events = await Effect.runPromise(
+      store.listEvents!("dealroom", first.fingerprint),
+    );
+    const reaperEvent = events.find(
+      (event) => event.extra?.operation === "reapStuck",
+    );
+    expect(reaperEvent?.stack).toContain(
+      "Caused by: Error: write CONNECTION_CLOSED",
+    );
+    expect(reaperEvent?.extra?.errorCauses).toEqual([
+      expect.objectContaining({
+        message: "write CONNECTION_CLOSED",
+        name: "Error",
+        properties: expect.objectContaining({
+          code: "57P01",
+          detail: "server closed the connection unexpectedly",
+          routine: "ProcessInterrupts",
+          severity: "FATAL",
+        }),
+        stack: expect.stringContaining("Error: write CONNECTION_CLOSED"),
+      }),
+    ]);
+  });
+
+  test("preserves cross-realm causes and safely terminates circular chains", async () => {
+    const store = createMemoryIssueStore();
+    const tracker = createErrorTracker({ store });
+    const cause: {
+      cause?: unknown;
+      message: string;
+      name: string;
+      stack: string;
+    } = {
+      message: "driver failed",
+      name: "DriverError",
+      stack: "DriverError: driver failed\n    at driver.js:2:1",
+    };
+    cause.cause = cause;
+    await tracker.captureException({
+      cause,
+      message: "query failed",
+      name: "QueryError",
+      stack: "QueryError: query failed\n    at query.js:1:1",
+    });
+
+    const issues = await Effect.runPromise(store.listIssues!());
+    const events = await Effect.runPromise(
+      store.listEvents!("default", issues[0]!.fingerprint),
+    );
+    expect(events[0]?.stack).toStartWith(
+      "QueryError: query failed\n    at query.js:1:1",
+    );
+    expect(events[0]?.extra?.errorCauses).toEqual([
+      expect.objectContaining({
+        message: "driver failed",
+        name: "DriverError",
+      }),
+      {
+        message: "Cause chain references an earlier error",
+        name: "CircularErrorCause",
+      },
+    ]);
+  });
+
   test("digits + quoted strings normalized out of the message for fingerprinting", async () => {
     const tracker = createErrorTracker();
     const a = await tracker.captureException(

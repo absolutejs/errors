@@ -270,7 +270,11 @@ describe("createDrainer", () => {
       buffer,
       intervalMs: 1_000_000,
       prepare: (event) =>
-        Effect.succeed({ ...event, message: "sanitized", stack: "SYMBOLICATED" }),
+        Effect.succeed({
+          ...event,
+          message: "sanitized",
+          stack: "SYMBOLICATED",
+        }),
       store,
     });
     buffer.push(ev({ stack: "minified" }));
