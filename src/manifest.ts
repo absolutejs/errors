@@ -4,6 +4,7 @@ import {
   toolFactory,
 } from "@absolutejs/manifest";
 import { Type } from "@sinclair/typebox";
+import { Effect } from "effect";
 import type {
   ErrorTracker,
   ErrorTrackerOptions,
@@ -166,6 +167,90 @@ export const manifest = defineManifest<ErrorTrackerOptions, ErrorTracker>()({
       handler: (_input, tracker) => JSON.stringify(tracker.metrics()),
       input: Type.Object({}),
     }),
+    issue_events: tool.runtime({
+      annotations: { readOnlyHint: true },
+      authorization: {
+        approval: "never",
+        audience: "admin",
+        effects: ["read"],
+        requiredScopes: ["errors:read"],
+        resource: {
+          idField: "fingerprint",
+          tenantIdField: "project",
+          type: "error-issue",
+        },
+      },
+      description:
+        "Read a bounded durable event timeline for one project-scoped issue, including its already-redacted stack, tags, trace, and replay correlation.",
+      handler: async ({ fingerprint, limit, project }, tracker) => {
+        if (!tracker.store?.listEvents)
+          return "durable issue event storage is unavailable";
+        const events = await Effect.runPromise(
+          tracker.store.listEvents(project, fingerprint, limit ?? 20),
+        );
+
+        return JSON.stringify(events);
+      },
+      input: Type.Object(
+        {
+          fingerprint: Type.String({ maxLength: 128, minLength: 1 }),
+          limit: Type.Optional(
+            Type.Integer({ default: 20, maximum: 100, minimum: 1 }),
+          ),
+          project: Type.String({ maxLength: 255, minLength: 1 }),
+        },
+        { additionalProperties: false },
+      ),
+    }),
+    list_issues: tool.runtime({
+      annotations: { readOnlyHint: true },
+      authorization: {
+        approval: "never",
+        audience: "admin",
+        effects: ["read"],
+        requiredScopes: ["errors:read"],
+      },
+      description:
+        "List bounded durable grouped issues across every project or one exact project. Results contain issue metadata, not raw event context.",
+      handler: async (
+        { environment, limit, project, query, state },
+        tracker,
+      ) => {
+        if (!tracker.store?.listIssues)
+          return "durable issue list storage is unavailable";
+        const issues = await Effect.runPromise(
+          tracker.store.listIssues({
+            ...(environment ? { environment } : {}),
+            limit: limit ?? 20,
+            ...(project ? { project } : {}),
+            ...(query ? { query } : {}),
+            ...(state ? { state } : {}),
+          }),
+        );
+
+        return JSON.stringify(issues);
+      },
+      input: Type.Object(
+        {
+          environment: Type.Optional(
+            Type.String({ maxLength: 64, minLength: 1 }),
+          ),
+          limit: Type.Optional(
+            Type.Integer({ default: 20, maximum: 100, minimum: 1 }),
+          ),
+          project: Type.Optional(Type.String({ maxLength: 255, minLength: 1 })),
+          query: Type.Optional(Type.String({ maxLength: 255, minLength: 1 })),
+          state: Type.Optional(
+            Type.Union([
+              Type.Literal("ignored"),
+              Type.Literal("resolved"),
+              Type.Literal("unresolved"),
+            ]),
+          ),
+        },
+        { additionalProperties: false },
+      ),
+    }),
     list_recent_errors: tool.runtime({
       annotations: { readOnlyHint: true },
       authorization: {
@@ -195,6 +280,46 @@ export const manifest = defineManifest<ErrorTrackerOptions, ErrorTracker>()({
       input: Type.Object({
         limit: Type.Optional(Type.Integer({ maximum: 100, minimum: 1 })),
       }),
+    }),
+    set_issue_state: tool.runtime({
+      annotations: { idempotentHint: true },
+      authorization: {
+        approval: "policy",
+        audience: "admin",
+        effects: ["write"],
+        idempotency: { mode: "host" },
+        requiredScopes: ["errors:write"],
+        resource: {
+          idField: "fingerprint",
+          tenantIdField: "project",
+          type: "error-issue",
+        },
+        reversible: false,
+      },
+      description:
+        "Resolve, ignore, or reopen one exact durable issue after policy approval. Evidence remains immutable and a recurrence can still reopen a resolved issue.",
+      handler: async ({ fingerprint, project, state }, tracker) => {
+        if (!tracker.store?.setState)
+          return "durable issue state storage is unavailable";
+        await Effect.runPromise(
+          tracker.store.setState(project, fingerprint, state),
+        );
+
+        return JSON.stringify({ fingerprint, project, state });
+      },
+      input: Type.Object(
+        {
+          fingerprint: Type.String({ maxLength: 128, minLength: 1 }),
+          project: Type.String({ maxLength: 255, minLength: 1 }),
+          reason: Type.String({ maxLength: 500, minLength: 8 }),
+          state: Type.Union([
+            Type.Literal("ignored"),
+            Type.Literal("resolved"),
+            Type.Literal("unresolved"),
+          ]),
+        },
+        { additionalProperties: false },
+      ),
     }),
   },
   wiring: [

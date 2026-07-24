@@ -5,7 +5,7 @@
     "": {
       "name": "@absolutejs/errors",
       "dependencies": {
-        "@absolutejs/manifest": "^0.4.0",
+        "@absolutejs/manifest": "^0.5.0",
         "@sinclair/typebox": "^0.34.0",
       },
       "devDependencies": {
@@ -29,7 +29,7 @@
     },
   },
   "packages": {
-    "@absolutejs/manifest": ["@absolutejs/manifest@0.4.0", "", { "peerDependencies": { "@sinclair/typebox": "^0.34.0" }, "bin": { "absolute-manifest": "dist/cli.js" } }, "sha512-hhgUMB2Q9+m2BxL7D9fITQfCtYJTwA1IC1jZIFFvz6ESUz4FV2OlvR8q95Dk3xn+TVrSihTitia9VIXD2hD5QA=="],
+    "@absolutejs/manifest": ["@absolutejs/manifest@0.5.0", "", { "peerDependencies": { "@sinclair/typebox": "^0.34.0" }, "bin": { "absolute-manifest": "dist/cli.js" } }, "sha512-HZqBJSzB9VPBk6ylThaJvxKNptHVBnfwyYNquI7CX8gwXOPmxUBVQsJHvoJy30B3aI8HXRer0fJiD52PjM1GeQ=="],
 
     "@borewit/text-codec": ["@borewit/text-codec@0.2.2", "", {}, "sha512-DDaRehssg1aNrH4+2hnj1B7vnUGEjU6OIlyRdkMd0aUdIUvKXrJfXsy8LVtXAy7DRvYVluWbMspsRhz2lcW0mQ=="],
 

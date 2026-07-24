@@ -411,6 +411,11 @@ export type ErrorTracker = {
   clearRecent: () => void;
   /** Operator-shaped counters. */
   metrics: () => ErrorTrackerMetrics;
+  /**
+   * Configured durable issue store. Exposed for manifest-governed operator
+   * tools; application code should prefer the tracker capture APIs for writes.
+   */
+  store?: IssueStore;
 };
 
 // =============================================================================
@@ -840,6 +845,7 @@ export const createErrorTracker = (
       captured: counters.captured,
     }),
     recentErrors: () => [...recent],
+    ...(options.store === undefined ? {} : { store: options.store }),
   };
 };
 

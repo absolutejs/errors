@@ -41,6 +41,7 @@ specifically — retry the store, page on audit loss, ignore a flaky
 
 ```ts
 import { Effect } from "effect";
+import { status } from "elysia";
 import { createErrorTracker, createMemoryIssueStore } from "@absolutejs/errors";
 import { tracerOrNoop } from "@absolutejs/telemetry";
 
@@ -82,7 +83,10 @@ if (out.failures.length > 0) {
     }
   }
 }
-return new Response(`error ${out.fingerprint}`, { status: 500 });
+return status(
+  "Internal Server Error",
+  `Request failed. Reference: ${out.fingerprint}`,
+);
 ```
 
 ## API
@@ -109,6 +113,7 @@ captureException(error, context?) => Promise<CaptureOutcome>         // Promise 
 recentErrors()                    => ReadonlyArray<CapturedError>
 clearRecent()                     => void
 metrics()                         => { captured, captureErrors, byFingerprint }
+store?                            => IssueStore
 
 type CaptureOutcome = {
   fingerprint: string;
