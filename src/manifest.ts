@@ -110,12 +110,12 @@ export const manifest = defineManifest<ErrorTrackerOptions, ErrorTracker>()({
     peers: [
       {
         name: "effect",
-        range: "^3.21.0",
+        range: ">=3.22.0 <4",
         reason: "Effect runtime — capture() returns typed Effect values",
       },
       {
         name: "elysia",
-        range: ">=1.4.0",
+        range: ">=1.4.29 <2",
         reason:
           "only needed for the browser-ingest recipe (POST /ingest route)",
       },
