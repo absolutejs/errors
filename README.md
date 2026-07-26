@@ -28,6 +28,12 @@ fingerprinting so causes add diagnosis without collapsing distinct operations.
 Browser ingest recomputes its canonical fingerprint after the optional
 `prepare()` step. Source-mapped copies of the same failure therefore group
 together across releases even when their raw content-hashed chunk names differ.
+The ingest boundary also redacts credential-bearing fields, bearer/JWT values,
+breadcrumb text, and URL query/hash values after schema validation but before
+fingerprinting or buffering. This defense-in-depth pass is enabled by default;
+`createIngestEndpoint({ redact: false })` is available only for hosts that
+replace it with an equivalent trusted-boundary policy, while a custom
+`redact(event)` function can extend the built-in policy.
 
 ### Errors-as-values
 

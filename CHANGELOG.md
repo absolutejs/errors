@@ -1,5 +1,14 @@
 # @absolutejs/errors changelog
 
+## 0.6.2 — 2026-07-26
+
+- Browser ingest now performs defense-in-depth redaction after schema
+  validation and before fingerprinting or buffering.
+- Credential-bearing fields, bearer/JWT values, breadcrumb text, and URL
+  query/hash values are sanitized by default.
+- Hosts can replace the policy with `redact(event)` or explicitly disable it
+  when an equivalent trusted-boundary policy is present.
+
 ## 0.3.5 — 2026-07-23
 
 - Browser-ingest fingerprints are recomputed after `prepare()` so source-mapped

@@ -109,6 +109,62 @@ describe("createIngestEndpoint — validation", () => {
     expect(buffer.stats().events).toBe(1);
   });
 
+  test("redacts browser context before fingerprinting and buffering", async () => {
+    const buffer = createInMemoryEventBuffer();
+    const { ingest } = createIngestEndpoint({ buffer });
+    const result = await runIngest(
+      ingest({
+        body: envelope({
+          events: [
+            {
+              extra: {
+                breadcrumbs: [
+                  {
+                    message: "Authorization: Bearer header.payload.signature",
+                  },
+                ],
+                credentials: {
+                  apiKey: "key-live",
+                  nested: { password: "hunter2" },
+                },
+              },
+              message: "request failed token=raw-token",
+              name: "Error",
+              tags: {
+                url: "/callback?code=oauth-code&next=%2Fportal#done",
+              },
+            },
+          ],
+        }),
+      }),
+    );
+    expect(result.ok).toBe(true);
+
+    const event = buffer.drain()[0]?.representative;
+    expect(event?.message).toBe("request failed token=[REDACTED]");
+    expect(event?.tags?.url).toBe("/callback");
+    expect(event?.extra?.credentials).toEqual({
+      apiKey: "[REDACTED]",
+      nested: { password: "[REDACTED]" },
+    });
+    expect(event?.extra?.breadcrumbs).toEqual([
+      {
+        message: "Authorization: Bearer [REDACTED]",
+      },
+    ]);
+  });
+
+  test("supports replacing the default ingest redaction policy", async () => {
+    const buffer = createInMemoryEventBuffer();
+    const { ingest } = createIngestEndpoint({
+      buffer,
+      redact: (event) => ({ ...event, message: "host-redacted" }),
+    });
+    await runIngest(ingest({ body: envelope() }));
+
+    expect(buffer.drain()[0]?.representative.message).toBe("host-redacted");
+  });
+
   test("parses a raw JSON string body", async () => {
     const buffer = createInMemoryEventBuffer();
     const { ingest } = createIngestEndpoint({ buffer });
