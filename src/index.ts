@@ -22,6 +22,7 @@
  * A Promise edge (`captureException`) runs the effect for Promise-world
  * consumers; the Effect API (`capture`) is primary.
  */
+import type { HandoffSummary } from "@absolutejs/handoff";
 import { Data, Effect, Either, Option } from "effect";
 import {
   computeFingerprint,
@@ -80,6 +81,38 @@ export type ErrorContext = {
   /** Severity. Default `'error'`. */
   level?: "fatal" | "error" | "warning" | "info";
 };
+
+/**
+ * Produces a privacy-safe error context that links an Issue to a handoff.
+ * Latest evidence, messages, references, external ids, and raw payloads are
+ * deliberately excluded.
+ */
+export const handoffErrorContext = (
+  summary: HandoffSummary,
+  context: ErrorContext = {},
+): ErrorContext => ({
+  ...context,
+  extra: {
+    ...context.extra,
+    handoff: {
+      authoritativeOutcome: summary.authoritativeOutcome,
+      contradiction: summary.contradiction,
+      correlationId: summary.correlationId,
+      operation: summary.operation,
+      reportedOutcome: summary.reportedOutcome,
+      service: summary.service,
+      status: summary.status,
+    },
+  },
+  tags: {
+    ...context.tags,
+    "handoff.contradiction": String(summary.contradiction),
+    "handoff.operation": summary.operation,
+    "handoff.service": summary.service,
+    "handoff.status": summary.status,
+  },
+  target: context.target ?? summary.correlationId,
+});
 
 export type CapturedError = {
   /** Stable id grouping the same logical error across captures. */

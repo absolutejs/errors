@@ -7,6 +7,7 @@ import {
   AuditSinkFailure,
   createErrorTracker,
   createMemoryIssueStore,
+  handoffErrorContext,
   issueCulprit,
   issueTitle,
   IssueStoreQueryError,
@@ -19,6 +20,46 @@ import {
   type IssueUpsertResult,
   type StoredEvent,
 } from "../src/index";
+
+test("handoffErrorContext links Issues without copying evidence payloads", () => {
+  const context = handoffErrorContext(
+    {
+      authoritativeOutcome: "succeeded",
+      contradiction: true,
+      correlationId: "handoff-1",
+      latest: {
+        at: 1,
+        correlationId: "handoff-1",
+        externalId: "private-external-id",
+        message: "customer-visible error",
+        operation: "invoice_payment",
+        outcome: "failed",
+        reference: "private-reference",
+        service: "gateway",
+        source: "external_surface_report",
+      },
+      operation: "invoice_payment",
+      reportedOutcome: "failed",
+      service: "gateway",
+      status: "succeeded",
+    },
+    { tags: { component: "billing" } },
+  );
+
+  expect(context).toMatchObject({
+    target: "handoff-1",
+    tags: {
+      component: "billing",
+      "handoff.contradiction": "true",
+      "handoff.operation": "invoice_payment",
+      "handoff.service": "gateway",
+      "handoff.status": "succeeded",
+    },
+  });
+  expect(JSON.stringify(context)).not.toContain("private-external-id");
+  expect(JSON.stringify(context)).not.toContain("private-reference");
+  expect(JSON.stringify(context)).not.toContain("customer-visible error");
+});
 
 // =============================================================================
 // Mocks

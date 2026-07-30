@@ -190,6 +190,11 @@ an issue to its exact trace and DOM replay. `issueTitle()` / `issueCulprit()`
 are exported so store adapters derive the issue row without reaching into
 internals.
 
+`handoffErrorContext(summary)` links an Issue to an
+`@absolutejs/handoff` summary through bounded tags and a privacy-safe
+projection. It excludes the latest evidence payload, messages, references, and
+external ids.
+
 ## Fingerprinting
 
 The default fingerprint is a 16-hex-char prefix of SHA-1 over

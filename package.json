@@ -1,6 +1,6 @@
 {
   "name": "@absolutejs/errors",
-  "version": "0.6.2",
+  "version": "0.6.3",
   "description": "Effect-native, Sentry-equivalent exception capture for the AbsoluteJS substrate. createErrorTracker decorates @absolutejs/audit + @absolutejs/telemetry + a durable issue store; capture() returns a CaptureOutcome with per-sink delivery state + typed (Data.TaggedError) failures — errors-as-values. Plus /ingest (coalescing buffer + Schema-validated endpoint + drainer for browser beacon payloads) and /symbolicate (source-map stack rewriting). No vendor lock-in.",
   "repository": {
     "type": "git",
@@ -84,7 +84,7 @@
     "README.md"
   ],
   "scripts": {
-    "build": "rm -rf dist && bun build src/index.ts src/ingest.ts src/symbolicate.ts src/manifest.ts --outdir dist --sourcemap --target=bun --external effect --external @jridgewell/trace-mapping --external elysia && tsc --project tsconfig.build.json && absolute-manifest emit",
+    "build": "rm -rf dist && bun build src/index.ts src/ingest.ts src/symbolicate.ts src/manifest.ts --outdir dist --sourcemap --target=bun --external @absolutejs/handoff --external effect --external @jridgewell/trace-mapping --external elysia && tsc --project tsconfig.build.json && absolute-manifest emit",
     "test": "bun test tests/",
     "typecheck": "tsc --noEmit",
     "format": "prettier --write \"./**/*.{ts,json,md}\"",
@@ -106,6 +106,7 @@
     "observability"
   ],
   "dependencies": {
+    "@absolutejs/handoff": "0.1.0",
     "@absolutejs/manifest": "^0.7.2",
     "@sinclair/typebox": "^0.34.0"
   },
