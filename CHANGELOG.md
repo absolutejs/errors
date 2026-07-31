@@ -6,8 +6,8 @@
 - Add `errorsPlugin`, which configures request-error capture and optional
   browser ingest through one Elysia plugin while preserving the browser/Effect
   boundary.
-- Re-export the clearly named low-level `errorBoundaryPlugin` and retain the
-  former `errorsElysia` compatibility alias.
+- Fold the Elysia request boundary into `errorsPlugin` and remove the standalone
+  `ingestPlugin`; `@absolutejs/errors` now has one public Elysia plugin.
 
 ## 0.6.2 — 2026-07-26
 

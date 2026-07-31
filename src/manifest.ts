@@ -116,8 +116,7 @@ export const manifest = defineManifest<ErrorTrackerOptions, ErrorTracker>()({
       {
         name: "elysia",
         range: ">=1.4.29 <2",
-        reason:
-          "only needed for the browser-ingest recipe (POST /ingest route)",
+        reason: "only needed for the combined server and browser error plugin",
       },
     ],
   },
@@ -339,7 +338,7 @@ export const manifest = defineManifest<ErrorTrackerOptions, ErrorTracker>()({
         "Captures Elysia request failures and accepts batched error envelopes from @absolutejs/beacon through one server plugin.",
       id: "elysia",
       server: {
-        code: ".use(await errorsPlugin({ tracker: errorTracker, ingest: { store: ${slot.store} } }))",
+        code: ".use(errorsPlugin({ tracker: errorTracker, ingest: { store: ${slot.store} } }))",
         imports: [
           { from: "@absolutejs/errors/elysia", names: ["errorsPlugin"] },
         ],

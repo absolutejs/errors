@@ -149,9 +149,9 @@ const tracker = createErrorTracker({
 
 const app = new Elysia()
   .use(
-    await errorsPlugin({
+    errorsPlugin({
       tracker,
-      boundary: {
+      server: {
         context: ({ request }) => ({
           tenant: request.headers.get("x-user-id") ?? undefined,
         }),
@@ -174,18 +174,16 @@ const app = new Elysia()
   });
 ```
 
-`boundary` captures thrown, handled, and unexplained returned 5xx responses.
-It is enabled by default and can be disabled with `boundary: false`. `ingest`
+`server` captures thrown, handled, and unexplained returned 5xx responses.
+It is enabled by default and can be disabled with `server: false`. `ingest`
 mounts the browser-event endpoint and is opt-in; pass `{}` to use the tracker's
 store and defaults, or `false`/omit it to expose no route.
 
 This subpath is server-only and contains the Effect-backed tracker/ingest
 runtime. Browser code should use `@absolutejs/beacon` (or
-`@absolutejs/observability`) and never import `@absolutejs/errors/elysia`. For a
-small Elysia request boundary that forwards captures without loading the
-tracker, import `errorBoundaryPlugin` directly from the Effect-free
-`@absolutejs/errors-elysia` package. Its former `errorsElysia` name remains a
-deprecated compatibility alias.
+`@absolutejs/observability`) and never import `@absolutejs/errors/elysia`.
+Forwarding-only servers can omit `tracker` and provide `server.capture`
+directly; this is still the same `errorsPlugin`.
 
 ## Durable issues (the "Issues" surface)
 

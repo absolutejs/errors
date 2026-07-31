@@ -1,101 +1,176 @@
 /**
  * Server-only Elysia integration for `@absolutejs/errors`.
  *
- * This entry point deliberately does not flow through the package root or any
- * browser entry. It composes the small Effect-free HTTP error boundary with
- * the Effect-backed browser ingest pipeline only on the server.
+ * This entry point is isolated from the package root and every browser entry.
+ * It is the single public Elysia plugin for request errors and browser ingest.
  */
-import {
-  errorsElysia,
-  handledError,
-  type ErrorCaptureContext,
-  type ErrorElysiaCapture,
-  type ErrorElysiaContext,
-  type ErrorsElysiaOptions,
-} from "@absolutejs/errors-elysia";
 import { Elysia } from "elysia";
-import type { ErrorTracker, IssueStore } from "./index";
-import { ingestPlugin, type IngestPluginOptions } from "./ingest";
+import { Effect, Either } from "effect";
+import type {
+  ErrorTracker,
+  IssueStore,
+  IssueStoreError,
+  IssueUpsertResult,
+  StoredEvent,
+} from "./index";
+import {
+  createDrainer,
+  createInMemoryEventBuffer,
+  createIngestEndpoint,
+  ingestRejectionStatus,
+  type EventBuffer,
+  type IngestAuthorizer,
+  type InMemoryEventBufferOptions,
+} from "./ingest";
+import {
+  handledError,
+  mountServerErrorBoundary,
+  type ErrorsCapture,
+  type ErrorsCaptureContext,
+  type ErrorsServerContext,
+  type ServerBoundaryOptions,
+} from "./elysia-server";
 
-export type ErrorBoundaryContext = ErrorElysiaContext;
-export type ErrorBoundaryCapture = ErrorElysiaCapture;
-export type ErrorBoundaryPluginOptions = ErrorsElysiaOptions;
-
-/**
- * The low-level, Effect-free request boundary. Use this directly when capture
- * is forwarded elsewhere and no local `ErrorTracker` is available.
- */
-export const errorBoundaryPlugin = errorsElysia;
-
-export { errorsElysia, handledError };
-export type { ErrorCaptureContext };
+export { handledError };
+export type { ErrorsCapture, ErrorsCaptureContext, ErrorsServerContext };
 
 export type ErrorsPluginTracker = Pick<
   ErrorTracker,
   "captureException" | "store"
 >;
 
-export type ErrorsPluginBoundaryOptions = Omit<
-  ErrorBoundaryPluginOptions,
+export type ErrorsPluginServerOptions = Omit<
+  ServerBoundaryOptions,
   "capture"
 > & {
-  /** Override the tracker's capture edge for this HTTP boundary. */
-  capture?: ErrorBoundaryCapture;
+  /** Defaults to `tracker.captureException`. */
+  capture?: ErrorsCapture;
 };
 
-export type ErrorsPluginIngestOptions = Omit<
-  IngestPluginOptions,
-  "makeElysia" | "store"
-> & {
+export type ErrorsPluginIngestOptions = InMemoryEventBufferOptions & {
   /** Defaults to the store configured on `tracker`. */
   store?: IssueStore;
+  buffer?: EventBuffer;
+  /** Route path. Default `/ingest`. */
+  path?: string;
+  authorize?: IngestAuthorizer;
+  maxBytes?: number;
+  maxEvents?: number;
+  intervalMs?: number;
+  prepare?: (event: StoredEvent) => Effect.Effect<StoredEvent>;
+  onIssue?: (result: IssueUpsertResult) => void | Promise<void>;
+  onError?: (error: IssueStoreError) => void;
 };
 
 export type ErrorsPluginOptions = {
-  tracker: ErrorsPluginTracker;
   /**
-   * Request-error capture settings. Enabled by default; set `false` when this
-   * app already has an outer error boundary.
+   * Supplies the default server capture edge and ingest store. Optional when
+   * the enabled sections provide those values directly.
    */
-  boundary?: false | ErrorsPluginBoundaryOptions;
+  tracker?: ErrorsPluginTracker;
   /**
-   * Browser-event ingest settings. Omitted/false means no ingest route is
-   * opened. Pass an object (often `{}`) to mount it.
+   * Request-error settings. Enabled by default; set `false` to install no
+   * request boundary.
+   */
+  server?: false | ErrorsPluginServerOptions;
+  /**
+   * Browser-event ingest settings. Omitted/false means no route is opened.
    */
   ingest?: false | ErrorsPluginIngestOptions;
 };
 
-/**
- * Configure server request capture and browser-event ingest through one
- * Elysia plugin. The ingest route remains opt-in because opening an endpoint
- * is a security-relevant server decision.
- */
-export const errorsPlugin = async (options: ErrorsPluginOptions) => {
-  const app = new Elysia({ name: "@absolutejs/errors" });
+type IngestContext = {
+  body: unknown;
+  headers: Record<string, string | undefined>;
+  set: { status?: number };
+};
 
-  if (options.boundary !== false) {
-    const boundary = options.boundary ?? {};
-    app.use(
-      errorBoundaryPlugin({
-        ...boundary,
-        capture: boundary.capture ?? options.tracker.captureException,
-      }),
-    );
+const mountBrowserIngest = (
+  app: Elysia,
+  options: ErrorsPluginIngestOptions,
+  store: IssueStore,
+) => {
+  const buffer = options.buffer ?? createInMemoryEventBuffer(options);
+  const endpoint = createIngestEndpoint({
+    buffer,
+    ...(options.authorize !== undefined
+      ? { authorize: options.authorize }
+      : {}),
+    ...(options.maxBytes !== undefined ? { maxBytes: options.maxBytes } : {}),
+    ...(options.maxEvents !== undefined
+      ? { maxEvents: options.maxEvents }
+      : {}),
+  });
+  const drainer = createDrainer({
+    buffer,
+    store,
+    ...(options.intervalMs !== undefined
+      ? { intervalMs: options.intervalMs }
+      : {}),
+    ...(options.prepare !== undefined ? { prepare: options.prepare } : {}),
+    ...(options.maxSamplesPerGroup !== undefined
+      ? { maxSamplesPerGroup: options.maxSamplesPerGroup }
+      : {}),
+    ...(options.onIssue !== undefined ? { onIssue: options.onIssue } : {}),
+    ...(options.onError !== undefined ? { onError: options.onError } : {}),
+  });
+
+  return app
+    .post(options.path ?? "/ingest", async (rawContext) => {
+      const context = rawContext as unknown as IngestContext;
+      const lengthHeader = context.headers["content-length"];
+      const bytes =
+        lengthHeader !== undefined ? Number(lengthHeader) : undefined;
+      const key = context.headers["x-beacon-key"];
+      const outcome = await Effect.runPromise(
+        Effect.either(
+          endpoint.ingest({
+            body: context.body,
+            ...(bytes !== undefined && !Number.isNaN(bytes) ? { bytes } : {}),
+            ...(key !== undefined ? { key } : {}),
+          }),
+        ),
+      );
+      if (Either.isRight(outcome)) {
+        context.set.status = 202;
+        return outcome.right;
+      }
+      context.set.status = ingestRejectionStatus(outcome.left);
+      return { error: outcome.left._tag };
+    })
+    .onStop(async () => {
+      await drainer.stop();
+    });
+};
+
+/**
+ * The only Elysia plugin exported by `@absolutejs/errors`.
+ *
+ * It can capture server request failures, receive browser events, or do both.
+ * Each section is configured independently through one plugin invocation.
+ */
+export const errorsPlugin = (options: ErrorsPluginOptions) => {
+  let app = new Elysia({ name: "@absolutejs/errors" });
+
+  if (options.server !== false) {
+    const server = options.server ?? {};
+    const capture = server.capture ?? options.tracker?.captureException;
+    if (capture === undefined) {
+      throw new Error(
+        "@absolutejs/errors errorsPlugin requires server.capture or tracker when server capture is enabled",
+      );
+    }
+    app = mountServerErrorBoundary(app, { ...server, capture });
   }
 
   if (options.ingest !== undefined && options.ingest !== false) {
-    const { store: configuredStore, ...ingest } = options.ingest;
-    const store = configuredStore ?? options.tracker.store;
+    const store = options.ingest.store ?? options.tracker?.store;
     if (store === undefined) {
       throw new Error(
         "@absolutejs/errors errorsPlugin requires ingest.store or a store configured on tracker when ingest is enabled",
       );
     }
-    const ingestApp = await ingestPlugin({ ...ingest, store });
-    // `ingestPlugin` exposes a framework-light structural return type so its
-    // lower-level API can stay lazily coupled to Elysia. Without a custom
-    // factory it is guaranteed to return the real Elysia instance used here.
-    app.use(ingestApp as Elysia);
+    app = mountBrowserIngest(app, options.ingest, store);
   }
 
   return app;

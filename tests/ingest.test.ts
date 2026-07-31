@@ -9,7 +9,6 @@ import {
   createDrainer,
   createIngestEndpoint,
   createInMemoryEventBuffer,
-  ingestPlugin,
   ingestRejectionStatus,
   type IngestRejection,
 } from "../src/ingest";
@@ -430,35 +429,5 @@ describe("createDrainer", () => {
     expect(result.failures).toBe(1);
     expect(errors).toEqual(["IssueStoreQueryError"]);
     await drainer.stop();
-  });
-});
-
-describe("ingestPlugin lifecycle", () => {
-  test("flushes the pending buffer when Elysia stops", async () => {
-    const store = createMemoryIssueStore();
-    const buffer = createInMemoryEventBuffer();
-    let stop: (() => unknown) | undefined;
-    await ingestPlugin({
-      buffer,
-      intervalMs: 1_000_000,
-      makeElysia: () => ({
-        onStop(handler) {
-          stop = handler;
-          return this;
-        },
-        post() {
-          return this;
-        },
-      }),
-      store,
-    });
-    buffer.push(ev());
-
-    expect(stop).toBeFunction();
-    await stop?.();
-    const issues = await Effect.runPromise(
-      store.listIssues!({ project: "acme" }),
-    );
-    expect(issues[0]?.timesSeen).toBe(1);
   });
 });

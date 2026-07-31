@@ -20,8 +20,8 @@
  * Errors-as-values: every rejection is a typed `IngestRejection` (tagged), each
  * mapping to a specific HTTP status via the exhaustive `ingestRejectionStatus`.
  *
- * Optional peer: `elysia` (only for `ingestPlugin`; the endpoint/buffer/drainer
- * are framework-agnostic).
+ * The endpoint, buffer, and drainer are framework-agnostic. Elysia mounting is
+ * provided only by the combined `errorsPlugin` in `@absolutejs/errors/elysia`.
  */
 import { Data, Effect, Either, ParseResult, Schema } from "effect";
 import { computeFingerprint } from "./fingerprint";
@@ -689,106 +689,4 @@ export const createDrainer = (options: DrainerOptions): Drainer => {
       return Effect.runPromise(flush());
     },
   };
-};
-
-// =============================================================================
-// Optional Elysia plugin — thin wrapper that wires buffer + endpoint + drainer
-// =============================================================================
-
-type ElysiaContext = {
-  body: unknown;
-  headers: Record<string, string | undefined>;
-  set: { status?: number };
-};
-
-type ElysiaLike = {
-  post: (
-    path: string,
-    handler: (context: ElysiaContext) => unknown,
-  ) => ElysiaLike;
-  onStop?: (handler: () => unknown) => ElysiaLike;
-};
-
-export type IngestPluginOptions = InMemoryEventBufferOptions & {
-  store: IssueStore;
-  /** Reuse an existing buffer (e.g. a Redis-backed one). Defaults to in-memory. */
-  buffer?: EventBuffer;
-  /** Route path. Default `/ingest`. */
-  path?: string;
-  authorize?: IngestAuthorizer;
-  maxBytes?: number;
-  maxEvents?: number;
-  intervalMs?: number;
-  prepare?: (event: StoredEvent) => Effect.Effect<StoredEvent>;
-  onIssue?: (result: IssueUpsertResult) => void | Promise<void>;
-  onError?: (error: IssueStoreError) => void;
-  /** Provide your own Elysia instance factory (to name/scope it). */
-  makeElysia?: () => ElysiaLike;
-};
-
-/**
- * Mount a `POST /ingest` route + start the drainer on one Elysia plugin.
- * `elysia` is a lazily-imported optional peer. Returns the Elysia instance.
- */
-export const ingestPlugin = async (
-  options: IngestPluginOptions,
-): Promise<ElysiaLike> => {
-  const buffer = options.buffer ?? createInMemoryEventBuffer(options);
-  const endpoint = createIngestEndpoint({
-    buffer,
-    ...(options.authorize !== undefined
-      ? { authorize: options.authorize }
-      : {}),
-    ...(options.maxBytes !== undefined ? { maxBytes: options.maxBytes } : {}),
-    ...(options.maxEvents !== undefined
-      ? { maxEvents: options.maxEvents }
-      : {}),
-  });
-  const drainer = createDrainer({
-    buffer,
-    store: options.store,
-    ...(options.intervalMs !== undefined
-      ? { intervalMs: options.intervalMs }
-      : {}),
-    ...(options.prepare !== undefined ? { prepare: options.prepare } : {}),
-    ...(options.maxSamplesPerGroup !== undefined
-      ? { maxSamplesPerGroup: options.maxSamplesPerGroup }
-      : {}),
-    ...(options.onIssue !== undefined ? { onIssue: options.onIssue } : {}),
-    ...(options.onError !== undefined ? { onError: options.onError } : {}),
-  });
-
-  const mod = (await import("elysia")) as {
-    Elysia: new (config?: { name?: string }) => ElysiaLike;
-  };
-  const app =
-    options.makeElysia !== undefined
-      ? options.makeElysia()
-      : new mod.Elysia({ name: "@absolutejs/errors-ingest" });
-
-  const routed = app.post(options.path ?? "/ingest", async (context) => {
-    const lengthHeader = context.headers["content-length"];
-    const bytes = lengthHeader !== undefined ? Number(lengthHeader) : undefined;
-    const key = context.headers["x-beacon-key"];
-    const outcome = await Effect.runPromise(
-      Effect.either(
-        endpoint.ingest({
-          body: context.body,
-          ...(bytes !== undefined && !Number.isNaN(bytes) ? { bytes } : {}),
-          ...(key !== undefined ? { key } : {}),
-        }),
-      ),
-    );
-    if (Either.isRight(outcome)) {
-      context.set.status = 202;
-      return outcome.right;
-    }
-    context.set.status = ingestRejectionStatus(outcome.left);
-    return { error: outcome.left._tag };
-  });
-  return (
-    routed.onStop?.(async () => {
-      await drainer.stop();
-    }) ?? routed
-  );
 };
