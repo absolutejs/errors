@@ -336,16 +336,16 @@ export const manifest = defineManifest<ErrorTrackerOptions, ErrorTracker>()({
     },
     {
       description:
-        "Accepts batched error envelopes from @absolutejs/beacon in the browser: validates them, coalesces thundering herds, and upserts grouped issues into the store.",
-      id: "browser-ingest",
+        "Captures Elysia request failures and accepts batched error envelopes from @absolutejs/beacon through one server plugin.",
+      id: "elysia",
       server: {
-        code: ".use(await ingestPlugin({ store: ${slot.store} }))",
+        code: ".use(await errorsPlugin({ tracker: errorTracker, ingest: { store: ${slot.store} } }))",
         imports: [
-          { from: "@absolutejs/errors/ingest", names: ["ingestPlugin"] },
+          { from: "@absolutejs/errors/elysia", names: ["errorsPlugin"] },
         ],
         placement: "server-plugin",
       },
-      title: "Receive browser errors (beacon → POST /ingest)",
+      title: "Capture server and browser errors",
     },
   ],
 });

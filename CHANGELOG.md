@@ -1,5 +1,14 @@
 # @absolutejs/errors changelog
 
+## Unreleased
+
+- Add the server-only `@absolutejs/errors/elysia` entry point.
+- Add `errorsPlugin`, which configures request-error capture and optional
+  browser ingest through one Elysia plugin while preserving the browser/Effect
+  boundary.
+- Re-export the clearly named low-level `errorBoundaryPlugin` and retain the
+  former `errorsElysia` compatibility alias.
+
 ## 0.6.2 — 2026-07-26
 
 - Browser ingest now performs defense-in-depth redaction after schema

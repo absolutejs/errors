@@ -133,6 +133,60 @@ type CaptureOutcome = {
 `tenant`, `target`, `traceId`, `spanId`, `replayId`, `tags`, `extra`,
 `level`.
 
+## Elysia server integration
+
+`@absolutejs/errors/elysia` provides one server plugin with separate settings
+for the two error paths:
+
+```ts
+import { createErrorTracker, createMemoryIssueStore } from "@absolutejs/errors";
+import { errorsPlugin, handledError } from "@absolutejs/errors/elysia";
+import { Elysia, status } from "elysia";
+
+const tracker = createErrorTracker({
+  store: createMemoryIssueStore(), // use the Postgres adapter in production
+});
+
+const app = new Elysia()
+  .use(
+    await errorsPlugin({
+      tracker,
+      boundary: {
+        context: ({ request }) => ({
+          tenant: request.headers.get("x-user-id") ?? undefined,
+        }),
+      },
+      ingest: {
+        path: "/ingest",
+        // authorize, limits, buffer, symbolication, and drain settings
+      },
+    }),
+  )
+  .get("/report", async () => {
+    try {
+      return await buildReport();
+    } catch (error) {
+      return handledError(
+        status(500, { message: "Unable to build the report." }),
+        error,
+      );
+    }
+  });
+```
+
+`boundary` captures thrown, handled, and unexplained returned 5xx responses.
+It is enabled by default and can be disabled with `boundary: false`. `ingest`
+mounts the browser-event endpoint and is opt-in; pass `{}` to use the tracker's
+store and defaults, or `false`/omit it to expose no route.
+
+This subpath is server-only and contains the Effect-backed tracker/ingest
+runtime. Browser code should use `@absolutejs/beacon` (or
+`@absolutejs/observability`) and never import `@absolutejs/errors/elysia`. For a
+small Elysia request boundary that forwards captures without loading the
+tracker, import `errorBoundaryPlugin` directly from the Effect-free
+`@absolutejs/errors-elysia` package. Its former `errorsElysia` name remains a
+deprecated compatibility alias.
+
 ## Durable issues (the "Issues" surface)
 
 The in-process buffer is for triage; for a persistent, queryable
