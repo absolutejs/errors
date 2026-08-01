@@ -175,6 +175,11 @@ const app = new Elysia()
 ```
 
 `server` captures thrown, handled, and unexplained returned 5xx responses.
+Set `captureReturned5xx` to a predicate when an intentional control-plane
+response such as readiness `503` should remain observable through health
+monitoring without becoming an exception issue. The predicate receives the
+request context, response type, and status; thrown and explicitly handled
+exceptions are unaffected.
 It is enabled by default and can be disabled with `server: false`. `ingest`
 mounts the browser-event endpoint and is opt-in; pass `{}` to use the tracker's
 store and defaults, or `false`/omit it to expose no route.

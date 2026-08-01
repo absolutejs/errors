@@ -33,6 +33,16 @@ export type ErrorsCapture = (
   context?: ErrorsCaptureContext,
 ) => CaptureResult;
 
+export type Returned5xxCaptureInput = {
+  context: ErrorsServerContext;
+  responseType: string;
+  status: number;
+};
+
+export type Returned5xxCapturePolicy =
+  | boolean
+  | ((input: Returned5xxCaptureInput) => boolean | Promise<boolean>);
+
 export type ServerBoundaryOptions = {
   capture: ErrorsCapture;
   context?: (
@@ -41,7 +51,10 @@ export type ServerBoundaryOptions = {
     | ErrorsCaptureContext
     | undefined
     | Promise<ErrorsCaptureContext | undefined>;
-  captureReturned5xx?: boolean;
+  /** Capture unexplained returned 5xx responses. A predicate can exclude
+   * intentional control-plane responses such as readiness failures without
+   * suppressing thrown or explicitly handled exceptions on the same route. */
+  captureReturned5xx?: Returned5xxCapturePolicy;
   minimumStatus?: number;
   onCaptureError?: (error: unknown) => void;
   traceHeader?: string | null;
@@ -215,7 +228,24 @@ export const mountServerErrorBoundary = (
       if (status < minimumStatus) return;
 
       const hasHandledError = isRecord(response) && handledErrors.has(response);
-      if (!hasHandledError && !captureReturned5xx) return;
+      const returnedResponseType = responseType(response);
+      if (!hasHandledError) {
+        let shouldCapture: boolean;
+        try {
+          shouldCapture =
+            typeof captureReturned5xx === "function"
+              ? await captureReturned5xx({
+                  context,
+                  responseType: returnedResponseType,
+                  status,
+                })
+              : captureReturned5xx;
+        } catch (policyError) {
+          reportCaptureFailure(policyError);
+          return;
+        }
+        if (!shouldCapture) return;
+      }
       captured.add(context.request);
       const path = pathOf(context);
       const error = hasHandledError
@@ -228,7 +258,7 @@ export const mountServerErrorBoundary = (
         context,
         status,
         hasHandledError ? "handled_http_5xx" : "returned_http_5xx",
-        { responseType: responseType(response), statusCode: status },
+        { responseType: returnedResponseType, statusCode: status },
       );
     });
 };

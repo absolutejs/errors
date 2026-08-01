@@ -113,6 +113,46 @@ describe("errorsPlugin", () => {
     });
   });
 
+  test("filters intentional returned 5xx responses without hiding exceptions", async () => {
+    const { capture, captures } = recorder();
+    const app = new Elysia()
+      .use(
+        errorsPlugin({
+          server: {
+            capture,
+            captureReturned5xx: ({ context, responseType, status }) =>
+              !(
+                new URL(context.request.url).pathname === "/readyz" &&
+                responseType === "object" &&
+                status === 503
+              ),
+          },
+        }),
+      )
+      .get("/readyz", () => status(503, { status: "fail" }))
+      .get("/failed", () => status(503, "unavailable"))
+      .get("/readyz-threw", () => {
+        throw new Error("readiness implementation crashed");
+      });
+
+    const readiness = await app.handle(new Request("http://localhost/readyz"));
+    const failed = await app.handle(new Request("http://localhost/failed"));
+    const threw = await app.handle(
+      new Request("http://localhost/readyz-threw"),
+    );
+    await Bun.sleep(10);
+
+    expect(readiness.status).toBe(503);
+    expect(failed.status).toBe(503);
+    expect(threw.status).toBe(500);
+    expect(captures).toHaveLength(2);
+    const captureKinds = captures.map(
+      ({ context }) => context?.tags?.captureKind,
+    );
+    expect(captureKinds).toContain("returned_http_5xx");
+    expect(captureKinds).toContain("thrown_http_5xx");
+  });
+
   test("captures handled exceptions without exposing them", async () => {
     const { capture, captures } = recorder();
     const original = new Error("password=secret database unavailable");

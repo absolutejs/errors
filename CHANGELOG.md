@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Allow `captureReturned5xx` to be a per-response predicate, so applications
+  can exclude intentional control-plane 5xx responses without disabling
+  returned-response capture or suppressing real exceptions.
 - Add the server-only `@absolutejs/errors/elysia` entry point.
 - Add `errorsPlugin`, which configures request-error capture and optional
   browser ingest through one Elysia plugin while preserving the browser/Effect
