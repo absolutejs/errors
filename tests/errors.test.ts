@@ -277,6 +277,52 @@ describe("capture — basics", () => {
     expect(a.fingerprint).toBe(b.fingerprint);
   });
 
+  test("Safari frames prevent unrelated normalized messages from colliding", async () => {
+    const tracker = createErrorTracker();
+    const jsonLd = await tracker.captureException({
+      message: `undefined is not an object (evaluating 'r["@context"].toLowerCase')`,
+      name: "TypeError",
+      stack:
+        `TypeError: undefined is not an object\n` +
+        "@https://onspark.com/:3:185\n" +
+        "global code@https://onspark.com/:3:362",
+    });
+    const injected = await tracker.captureException({
+      message:
+        "undefined is not an object (evaluating 'window.webkit.messageHandlers')",
+      name: "TypeError",
+      stack:
+        `TypeError: undefined is not an object\n` +
+        "f@https://onspark.com/:1:681\n" +
+        "w@https://onspark.com/:1:1849",
+    });
+
+    expect(jsonLd.fingerprint).not.toBe(injected.fingerprint);
+  });
+
+  test("Safari frame line changes preserve one logical fingerprint", async () => {
+    const tracker = createErrorTracker();
+    const first = await tracker.captureException({
+      message:
+        "undefined is not an object (evaluating 'window.webkit.messageHandlers')",
+      name: "TypeError",
+      stack: "TypeError: failed\nsendDataToNative@https://onspark.com/:1:1142",
+    });
+    const moved = await tracker.captureException({
+      message:
+        "undefined is not an object (evaluating 'window.webkit.messageHandlers')",
+      name: "TypeError",
+      stack: "TypeError: failed\nsendDataToNative@https://onspark.com/:8:9912",
+    });
+
+    expect(first.fingerprint).toBe(moved.fingerprint);
+    expect(
+      issueCulprit(
+        "TypeError: failed\nsendDataToNative@https://onspark.com/:8:9912",
+      ),
+    ).toBe("sendDataToNative@https://onspark.com/:8:9912");
+  });
+
   test("custom fingerprint function is respected", async () => {
     const tracker = createErrorTracker({ fingerprint: () => "always-this" });
     const a = await tracker.captureException(new Error("a"));

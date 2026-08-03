@@ -12,12 +12,16 @@ const stripDigits = (s: string): string => s.replace(/\d+/g, "0");
 const stripQuoted = (s: string): string =>
   s.replace(/'[^']*'/g, "'?'").replace(/"[^"]*"/g, '"?"');
 
-/** First "user" stack frame — skip the `Error:` header line. */
+const isStackFrame = (line: string): boolean =>
+  line.startsWith("at ") ||
+  /^(?:[^@]*@)?(?:https?|file|blob|webpack):\/\/.+(?::\d+){1,2}$/u.test(line);
+
+/** First "user" stack frame — supports V8 and WebKit/Firefox formats. */
 const firstStackFrame = (stack: string | undefined): string => {
   if (stack === undefined) return "";
   for (const line of stack.split("\n")) {
     const trimmed = line.trim();
-    if (trimmed.startsWith("at ")) return trimmed;
+    if (isStackFrame(trimmed)) return trimmed;
   }
   return "";
 };

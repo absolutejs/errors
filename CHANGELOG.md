@@ -12,6 +12,14 @@
 - Fold the Elysia request boundary into `errorsPlugin` and remove the standalone
   `ingestPlugin`; `@absolutejs/errors` now has one public Elysia plugin.
 
+## 0.7.2 — 2026-08-03
+
+- Recognize Safari, WebKit, and Firefox `function@URL:line:column` stack frames
+  when deriving issue fingerprints and culprits. Unrelated browser errors no
+  longer collapse merely because quoted message expressions normalize alike.
+- Continue stripping frame digits so line and column shifts across releases do
+  not split one logical browser failure.
+
 ## 0.6.2 — 2026-07-26
 
 - Browser ingest now performs defense-in-depth redaction after schema
