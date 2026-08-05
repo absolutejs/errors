@@ -163,6 +163,27 @@ describe("capture — basics", () => {
     expect(a.fingerprint).not.toBe(b.fingerprint);
   });
 
+  test("semantic grouping keys keep synthetic errors stable across code changes", async () => {
+    const tracker = createErrorTracker();
+    const first = new Error("provider failed in release A");
+    first.stack = "Error: first\n    at /app/release-a.js:10:2";
+    const second = new TypeError("new wording in release B");
+    second.stack = "TypeError: second\n    at /app/release-b.js:900:4";
+
+    const a = await tracker.captureException(first, {
+      groupingKey: "google-ads-tag-load",
+    });
+    const b = await tracker.captureException(second, {
+      groupingKey: "google-ads-tag-load",
+    });
+    const c = await tracker.captureException(second, {
+      groupingKey: "different-integration",
+    });
+
+    expect(a.fingerprint).toBe(b.fingerprint);
+    expect(c.fingerprint).not.toBe(a.fingerprint);
+  });
+
   test("coerces non-Error inputs", async () => {
     const tracker = createErrorTracker();
     const outs = await Promise.all([

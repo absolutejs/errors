@@ -131,7 +131,20 @@ type CaptureOutcome = {
 
 `ErrorContext` carries the standard Sentry-style triage envelope:
 `tenant`, `target`, `traceId`, `spanId`, `replayId`, `tags`, `extra`,
-`level`.
+`level`, and an optional semantic `groupingKey`. Use a grouping key for
+synthetic or integration failures whose message or source frame may change
+between releases:
+
+```ts
+await errors.captureException(providerError, {
+  groupingKey: "google-ads-tag-load",
+  tags: { provider: "google" },
+});
+```
+
+The key is validated and hashed at the trusted errors boundary. Clients never
+choose the stored fingerprint directly, and project scoping still isolates
+otherwise-identical keys.
 
 ## Elysia server integration
 
@@ -254,7 +267,7 @@ external ids.
 
 ## Fingerprinting
 
-The default fingerprint is a 16-hex-char prefix of SHA-1 over
+Without a `groupingKey`, the default fingerprint is a 16-hex-char prefix of SHA-1 over
 
 ```
 error.name | normalized(message) | first-user-stack-frame

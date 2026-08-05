@@ -258,6 +258,44 @@ describe("createIngestEndpoint — validation", () => {
     expect(buffer.stats().events).toBe(3);
     expect(buffer.stats().groups).toBe(2);
   });
+
+  test("semantic grouping keys override volatile messages and stack frames", async () => {
+    const buffer = createInMemoryEventBuffer();
+    const { ingest } = createIngestEndpoint({ buffer });
+    await runIngest(
+      ingest({
+        body: envelope({
+          events: [
+            {
+              groupingKey: "google-ads-tag-load",
+              message: "failed in release 101",
+              name: "IntegrationWarning",
+              stack: "Error: first\n    at /app/release-a.js:10:2",
+            },
+            {
+              groupingKey: "google-ads-tag-load",
+              message: "wording changed in release 202",
+              name: "DifferentName",
+              stack: "Error: second\n    at /app/release-b.js:900:4",
+            },
+            {
+              groupingKey: "different-integration",
+              message: "wording changed in release 202",
+              name: "DifferentName",
+            },
+          ],
+        }),
+      }),
+    );
+
+    expect(buffer.stats()).toMatchObject({ events: 3, groups: 2 });
+    const groups = buffer.drain();
+    const googleAds = groups.find(
+      (group) => group.representative.groupingKey === "google-ads-tag-load",
+    );
+    expect(googleAds?.occurrences).toBe(2);
+    expect(googleAds?.samples).toHaveLength(2);
+  });
 });
 
 describe("ingestRejectionStatus", () => {

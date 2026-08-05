@@ -165,6 +165,7 @@ export const createInMemoryEventBuffer = (
 // =============================================================================
 
 const BeaconEventSchema = Schema.Struct({
+  groupingKey: Schema.optional(Schema.String),
   name: Schema.String,
   message: Schema.String,
   level: Schema.optional(Schema.Literal("fatal", "error", "warning", "info")),
@@ -295,6 +296,9 @@ const redactValue = (
  */
 export const redactBeaconEvent = (event: BeaconEvent): BeaconEvent => ({
   ...event,
+  ...(event.groupingKey !== undefined
+    ? { groupingKey: redactString(event.groupingKey).slice(0, 200) }
+    : {}),
   message: redactString(event.message),
   ...(event.stack !== undefined ? { stack: redactString(event.stack) } : {}),
   ...(event.tags !== undefined
@@ -444,6 +448,7 @@ export const createIngestEndpoint = (
       name: event.name,
       project: envelope.project,
     };
+    if (event.groupingKey !== undefined) stored.groupingKey = event.groupingKey;
     if (event.stack !== undefined) stored.stack = event.stack;
     if (envelope.release !== undefined) stored.release = envelope.release;
     if (envelope.environment !== undefined) {
@@ -508,6 +513,9 @@ export const createIngestEndpoint = (
         const event = redact(rawEvent);
         const fingerprint = yield* Effect.promise(() =>
           computeFingerprint({
+            ...(event.groupingKey !== undefined
+              ? { groupingKey: event.groupingKey }
+              : {}),
             message: event.message,
             name: event.name,
             ...(event.stack !== undefined ? { stack: event.stack } : {}),
@@ -597,6 +605,9 @@ export const createDrainer = (options: DrainerOptions): Drainer => {
       // the same source failure persist under one durable issue fingerprint.
       const fingerprint = yield* Effect.promise(() =>
         computeFingerprint({
+          ...(representative.groupingKey !== undefined
+            ? { groupingKey: representative.groupingKey }
+            : {}),
           message: representative.message,
           name: representative.name,
           ...(representative.stack !== undefined

@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Add semantic `groupingKey` support to server captures and browser ingest.
+  Keys are validated and hashed server-side, giving synthetic and integration
+  failures a stable issue identity without trusting client fingerprints.
 - Allow `captureReturned5xx` to be a per-response predicate, so applications
   can exclude intentional control-plane 5xx responses without disabling
   returned-response capture or suppressing real exceptions.

@@ -45,17 +45,25 @@ export const issueTitle = (name: string, message: string): string =>
 export const issueCulprit = (stack: string | undefined): string =>
   firstStackFrame(stack);
 
-/** The seed string a fingerprint hashes — name | normalized-message | top-frame. */
+/** The seed string a fingerprint hashes. A caller-supplied semantic grouping
+ * key deliberately replaces the volatile error signature; project scoping is
+ * still enforced by the issue store. */
 export const fingerprintSeed = (input: {
+  groupingKey?: string;
   name: string;
   message: string;
   stack?: string;
-}): string =>
-  [
+}): string => {
+  if (input.groupingKey !== undefined) {
+    return `grouping-key|${input.groupingKey.slice(0, 200)}`;
+  }
+
+  return [
     input.name,
     normalizeMessage(input.message ?? ""),
     stripDigits(firstStackFrame(input.stack)),
   ].join("|");
+};
 
 /**
  * The default fingerprint — 16-hex-char (64-bit) prefix of SHA-1 over the seed.
@@ -63,6 +71,7 @@ export const fingerprintSeed = (input: {
  * identically.
  */
 export const computeFingerprint = async (input: {
+  groupingKey?: string;
   name: string;
   message: string;
   stack?: string;

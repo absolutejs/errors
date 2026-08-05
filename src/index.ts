@@ -64,6 +64,9 @@ export type ErrorTracerLike = {
 // =============================================================================
 
 export type ErrorContext = {
+  /** Stable semantic issue identity for synthetic/integration errors whose
+   * message or source frame may change between builds. Hashed server-side. */
+  groupingKey?: string;
   /** Tenant id — propagates to audit `actor` + span attributes. */
   tenant?: string;
   /** What the error was acting on — audit `target`. */
@@ -237,6 +240,7 @@ export type IssueLevel = NonNullable<ErrorContext["level"]>;
 /** A single stored occurrence — denormalized for the events timeline. */
 export type StoredEvent = {
   fingerprint: string;
+  groupingKey?: string;
   /** Project/tenant scope. */
   project: string;
   /** Occurrence time (ms). */
@@ -457,10 +461,12 @@ export type ErrorTracker = {
 
 const defaultFingerprint = (
   error: Error,
-  _context: ErrorContext,
+  context: ErrorContext,
 ): Promise<string> => {
-  void _context;
   return computeFingerprint({
+    ...(context.groupingKey !== undefined
+      ? { groupingKey: context.groupingKey }
+      : {}),
     message: error.message ?? "",
     name: error.name,
     ...(error.stack !== undefined ? { stack: error.stack } : {}),
@@ -727,6 +733,9 @@ export const createErrorTracker = (
       name: event.name,
       project,
     };
+    if (event.context.groupingKey !== undefined) {
+      stored.groupingKey = event.context.groupingKey;
+    }
     if (event.stack !== undefined) stored.stack = event.stack;
     if (event.release !== undefined) stored.release = event.release;
     if (event.environment !== undefined) stored.environment = event.environment;
