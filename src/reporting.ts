@@ -49,8 +49,8 @@ const reportEvent = (
     report.body !== null && typeof report.body === "object"
       ? (report.body as Record<string, unknown>)
       : {};
-  const identity = reportIdentity(type, body);
   const path = reportPath(report.url);
+  const identity = type === "crash" ? path : reportIdentity(type, body);
   const age =
     typeof report.age === "number" &&
     Number.isFinite(report.age) &&

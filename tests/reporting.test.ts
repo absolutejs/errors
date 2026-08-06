@@ -25,7 +25,7 @@ describe("browserReportsEnvelope", () => {
     });
     expect(envelope?.events[0]).toMatchObject({
       at: 9750,
-      groupingKey: "browser-report:crash:crash",
+      groupingKey: "browser-report:crash:/portal/deals",
       level: "error",
       message: "Browser process crashed — /portal/deals",
       name: "BrowserCrash",
