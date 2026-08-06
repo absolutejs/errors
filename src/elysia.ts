@@ -23,6 +23,10 @@ import {
   type InMemoryEventBufferOptions,
 } from "./ingest";
 import {
+  browserReportsEnvelope,
+  type BrowserReportingOptions,
+} from "./reporting";
+import {
   handledError,
   mountServerErrorBoundary,
   type ErrorsCapture,
@@ -60,6 +64,16 @@ export type ErrorsPluginIngestOptions = InMemoryEventBufferOptions & {
   prepare?: (event: StoredEvent) => Effect.Effect<StoredEvent>;
   onIssue?: (result: IssueUpsertResult) => void | Promise<void>;
   onError?: (error: IssueStoreError) => void;
+  /** Browser Reporting API receiver. This is the only path that can receive
+   * crash reports because page JavaScript is gone when a browser crashes. */
+  reporting?:
+    | false
+    | (BrowserReportingOptions & {
+        /** Route path. Default `/ingest/reports`. */
+        path?: string;
+        /** Optional dedicated authorization for browser-generated reports. */
+        authorize?: IngestAuthorizer;
+      });
 };
 
 export type ErrorsPluginOptions = {
@@ -101,6 +115,22 @@ const mountBrowserIngest = (
       ? { maxEvents: options.maxEvents }
       : {}),
   });
+  const reporting = options.reporting;
+  const reportingEndpoint =
+    reporting === undefined || reporting === false
+      ? undefined
+      : createIngestEndpoint({
+          buffer,
+          ...(reporting.authorize === undefined
+            ? {}
+            : { authorize: reporting.authorize }),
+          ...(options.maxBytes !== undefined
+            ? { maxBytes: options.maxBytes }
+            : {}),
+          ...(options.maxEvents !== undefined
+            ? { maxEvents: options.maxEvents }
+            : {}),
+        });
   const drainer = createDrainer({
     buffer,
     store,
@@ -115,32 +145,69 @@ const mountBrowserIngest = (
     ...(options.onError !== undefined ? { onError: options.onError } : {}),
   });
 
-  return app
-    .post(options.path ?? "/ingest", async (rawContext) => {
-      const context = rawContext as unknown as IngestContext;
-      const lengthHeader = context.headers["content-length"];
-      const bytes =
-        lengthHeader !== undefined ? Number(lengthHeader) : undefined;
-      const key = context.headers["x-beacon-key"];
-      const outcome = await Effect.runPromise(
-        Effect.either(
-          endpoint.ingest({
-            body: context.body,
-            ...(bytes !== undefined && !Number.isNaN(bytes) ? { bytes } : {}),
-            ...(key !== undefined ? { key } : {}),
-          }),
-        ),
-      );
-      if (Either.isRight(outcome)) {
-        context.set.status = 202;
-        return outcome.right;
-      }
-      context.set.status = ingestRejectionStatus(outcome.left);
-      return { error: outcome.left._tag };
-    })
-    .onStop(async () => {
-      await drainer.stop();
-    });
+  let mounted = app.post(options.path ?? "/ingest", async (rawContext) => {
+    const context = rawContext as unknown as IngestContext;
+    const lengthHeader = context.headers["content-length"];
+    const bytes = lengthHeader !== undefined ? Number(lengthHeader) : undefined;
+    const key = context.headers["x-beacon-key"];
+    const outcome = await Effect.runPromise(
+      Effect.either(
+        endpoint.ingest({
+          body: context.body,
+          ...(bytes !== undefined && !Number.isNaN(bytes) ? { bytes } : {}),
+          ...(key !== undefined ? { key } : {}),
+        }),
+      ),
+    );
+    if (Either.isRight(outcome)) {
+      context.set.status = 202;
+      return outcome.right;
+    }
+    context.set.status = ingestRejectionStatus(outcome.left);
+    return { error: outcome.left._tag };
+  });
+
+  if (
+    reporting !== undefined &&
+    reporting !== false &&
+    reportingEndpoint !== undefined
+  ) {
+    mounted = mounted.post(
+      reporting.path ?? "/ingest/reports",
+      async (rawContext) => {
+        const context = rawContext as unknown as IngestContext;
+        const envelope = browserReportsEnvelope(context.body, reporting);
+        if (envelope === null) {
+          context.set.status = 400;
+          return { error: "InvalidBrowserReport" };
+        }
+        const lengthHeader = context.headers["content-length"];
+        const bytes =
+          lengthHeader === undefined ? undefined : Number(lengthHeader);
+        const key = context.headers["x-beacon-key"];
+        const outcome = await Effect.runPromise(
+          Effect.either(
+            reportingEndpoint.ingest({
+              body: envelope,
+              ...(bytes !== undefined && !Number.isNaN(bytes) ? { bytes } : {}),
+              ...(key === undefined ? {} : { key }),
+            }),
+          ),
+        );
+        if (Either.isRight(outcome)) {
+          context.set.status = 202;
+          return outcome.right;
+        }
+        context.set.status = ingestRejectionStatus(outcome.left);
+        return { error: outcome.left._tag };
+      },
+      { parse: "text" },
+    );
+  }
+
+  return mounted.onStop(async () => {
+    await drainer.stop();
+  });
 };
 
 /**

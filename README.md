@@ -171,6 +171,12 @@ const app = new Elysia()
       },
       ingest: {
         path: "/ingest",
+        reporting: {
+          path: "/ingest/reports",
+          project: "web",
+          environment: "production",
+          release: process.env.RELEASE_SHA,
+        },
         // authorize, limits, buffer, symbolication, and drain settings
       },
     }),
@@ -196,6 +202,13 @@ exceptions are unaffected.
 It is enabled by default and can be disabled with `server: false`. `ingest`
 mounts the browser-event endpoint and is opt-in; pass `{}` to use the tracker's
 store and defaults, or `false`/omit it to expose no route.
+
+`ingest.reporting` mounts a browser Reporting API receiver and converts crash,
+deprecation, intervention, and policy deliveries into the same validated issue
+pipeline. Send the response header
+`Reporting-Endpoints: default="/ingest/reports"` on documents to enable browser
+delivery. Crash reports cannot be collected with `ReportingObserver`: the page
+JavaScript is no longer running after a browser-process crash.
 
 This subpath is server-only and contains the Effect-backed tracker/ingest
 runtime. Browser code should use `@absolutejs/beacon` (or

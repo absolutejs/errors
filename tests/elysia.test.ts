@@ -89,6 +89,54 @@ describe("errorsPlugin", () => {
     expect(issues[0]?.title).toContain("browser failed");
   });
 
+  test("mounts the browser Reporting API crash receiver", async () => {
+    const store = createMemoryIssueStore();
+    const tracker = createErrorTracker({ store });
+    const app = new Elysia().use(
+      errorsPlugin({
+        server: false,
+        ingest: {
+          intervalMs: 5,
+          reporting: {
+            environment: "dev",
+            project: "dealroom",
+            release: "abc123",
+          },
+        },
+        tracker,
+      }),
+    );
+
+    const response = await app.handle(
+      new Request("http://localhost/ingest/reports", {
+        body: JSON.stringify([
+          {
+            age: 10,
+            body: { crash_report_api: { route: "/portal" } },
+            type: "crash",
+            url: "https://app.test/portal?secret=value",
+          },
+        ]),
+        headers: { "content-type": "application/reports+json" },
+        method: "POST",
+      }),
+    );
+    await Bun.sleep(20);
+    const issues = await Effect.runPromise(
+      store.listIssues!({ project: "dealroom" }),
+    );
+
+    expect(response.status).toBe(202);
+    expect(issues).toHaveLength(1);
+    expect(issues[0]).toMatchObject({
+      environment: "dev",
+      firstRelease: "abc123",
+      lastRelease: "abc123",
+      level: "error",
+      title: "BrowserCrash: Browser process crashed — /portal",
+    });
+  });
+
   test("captures a thrown server exception exactly once", async () => {
     const { capture, captures } = recorder();
     const original = new Error("database unavailable");

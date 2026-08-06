@@ -214,6 +214,7 @@ const URL_KEY_NAMES = new Set([
   "endpoint",
   "errorfilename",
   "resourceurl",
+  "sourcefile",
   "url",
 ]);
 const normalizeFieldName = (key: string): string =>
