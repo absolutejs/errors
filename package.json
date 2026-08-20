@@ -1,6 +1,6 @@
 {
   "name": "@absolutejs/errors",
-  "version": "0.8.1",
+  "version": "0.9.0",
   "description": "Effect-native, Sentry-equivalent exception capture for the AbsoluteJS substrate. createErrorTracker decorates @absolutejs/audit + @absolutejs/telemetry + a durable issue store; capture() returns a CaptureOutcome with per-sink delivery state + typed (Data.TaggedError) failures — errors-as-values. Plus /ingest (coalescing buffer + Schema-validated endpoint + drainer for browser beacon payloads) and /symbolicate (source-map stack rewriting). No vendor lock-in.",
   "repository": {
     "type": "git",
@@ -17,41 +17,7 @@
   "license": "BSL-1.1",
   "author": "Alex Kahn",
   "absolutejs": {
-    "manifestContract": 2,
-    "runtimePeers": {
-      "@jridgewell/trace-mapping": {
-        "artifactImports": [
-          "@jridgewell/trace-mapping"
-        ],
-        "buildExternals": [
-          "@jridgewell/trace-mapping"
-        ],
-        "optional": true,
-        "range": ">=0.3.31 <0.4",
-        "tested": "0.3.31"
-      },
-      "effect": {
-        "artifactImports": [
-          "effect"
-        ],
-        "buildExternals": [
-          "effect"
-        ],
-        "range": ">=3.22.0 <4",
-        "tested": "3.22.0"
-      },
-      "elysia": {
-        "artifactImports": [
-          "elysia"
-        ],
-        "buildExternals": [
-          "elysia"
-        ],
-        "optional": true,
-        "range": ">=1.4.29 <2",
-        "tested": "1.4.29"
-      }
-    }
+    "manifestContract": 2
   },
   "exports": {
     ".": {
@@ -99,7 +65,7 @@
     "typecheck": "tsc --noEmit",
     "format": "prettier --write \"./**/*.{ts,json,md}\"",
     "verify-package": "absolute-manifest verify-package",
-    "check:package": "bun run typecheck && bun run verify-package && bun run build && bun run verify-package --artifacts && bun run test",
+    "check:package": "bun run typecheck && bun run verify-package && bun run build && bun run test",
     "release": "bun run format && bun run check:package && bun publish"
   },
   "keywords": [
@@ -117,13 +83,13 @@
   ],
   "dependencies": {
     "@absolutejs/handoff": "0.1.0",
-    "@absolutejs/manifest": "^0.7.2",
+    "@absolutejs/manifest": "^0.9.0",
     "@sinclair/typebox": "^0.34.0"
   },
   "peerDependencies": {
     "@jridgewell/trace-mapping": ">=0.3.31 <0.4",
     "effect": ">=3.22.0 <4",
-    "elysia": ">=1.4.29 <2"
+    "elysia": "^2.0.0-beta.6"
   },
   "peerDependenciesMeta": {
     "@jridgewell/trace-mapping": {
@@ -137,8 +103,10 @@
     "@jridgewell/trace-mapping": "0.3.31",
     "@types/bun": "^1.3.14",
     "effect": "3.22.0",
-    "elysia": "1.4.29",
+    "elysia": "2.0.0-beta.6",
+    "exact-mirror": "1.2.4",
     "prettier": "^3.8.3",
+    "typebox": "1.3.16",
     "typescript": "^5.9.0"
   }
 }

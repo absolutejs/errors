@@ -2,7 +2,6 @@ import { Elysia, StatusMap } from "elysia";
 
 const DEFAULT_MINIMUM_STATUS = 500;
 const DEFAULT_TRACE_HEADER = "x-trace-id";
-const VALIDATION_STATUS = 422;
 
 type CaptureResult = unknown | Promise<unknown>;
 
@@ -99,7 +98,7 @@ const statusOfResponse = (response: unknown, setStatus: unknown) => {
   return statusFrom(setStatus) ?? 200;
 };
 
-const statusOfError = (error: unknown, code: unknown, setStatus: unknown) => {
+const statusOfError = (error: unknown, setStatus: unknown) => {
   if (isRecord(error)) {
     const errorStatus = statusFrom(error.status);
     if (errorStatus !== undefined) return errorStatus;
@@ -109,7 +108,7 @@ const statusOfError = (error: unknown, code: unknown, setStatus: unknown) => {
     return responseStatus;
   }
 
-  return code === "VALIDATION" ? VALIDATION_STATUS : DEFAULT_MINIMUM_STATUS;
+  return DEFAULT_MINIMUM_STATUS;
 };
 
 const responseType = (response: unknown) => {
@@ -196,7 +195,7 @@ export const mountServerErrorBoundary = (
   };
 
   return app
-    .onRequest((rawContext) => {
+    .request((rawContext) => {
       const context = rawContext as unknown as ErrorsServerContext;
       const traceId = options.traceId?.(context) ?? generatedTraceId();
       traces.set(context.request, traceId);
@@ -204,21 +203,16 @@ export const mountServerErrorBoundary = (
         context.set.headers[traceHeader] = traceId;
       }
     })
-    .onError({ as: "global" }, async (rawContext) => {
+    .error("global", async (rawContext) => {
       const context = rawContext as unknown as ErrorsServerContext & {
-        code?: unknown;
         error: unknown;
       };
-      const status = statusOfError(
-        context.error,
-        context.code,
-        context.set?.status,
-      );
+      const status = statusOfError(context.error, context.set?.status);
       if (status < minimumStatus || captured.has(context.request)) return;
       captured.add(context.request);
       await capture(context.error, context, status, "thrown_http_5xx");
     })
-    .onAfterResponse({ as: "global" }, async (rawContext) => {
+    .afterResponse("global", async (rawContext) => {
       const context = rawContext as unknown as ErrorsServerContext & {
         responseValue?: unknown;
       };

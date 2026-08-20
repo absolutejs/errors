@@ -174,6 +174,7 @@ const mountBrowserIngest = (
   ) {
     mounted = mounted.post(
       reporting.path ?? "/ingest/reports",
+      { parse: "text" },
       async (rawContext) => {
         const context = rawContext as unknown as IngestContext;
         const envelope = browserReportsEnvelope(context.body, reporting);
@@ -201,11 +202,10 @@ const mountBrowserIngest = (
         context.set.status = ingestRejectionStatus(outcome.left);
         return { error: outcome.left._tag };
       },
-      { parse: "text" },
     );
   }
 
-  return mounted.onStop(async () => {
+  return mounted.cleanup(async () => {
     await drainer.stop();
   });
 };
