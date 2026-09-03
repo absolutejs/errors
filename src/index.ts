@@ -30,6 +30,7 @@ import {
   issueCulprit,
   issueTitle,
 } from "./fingerprint";
+import { redactTelemetryString, redactTelemetryValue } from "./redaction";
 
 export {
   computeFingerprint,
@@ -37,6 +38,7 @@ export {
   issueTitle,
   fingerprintSeed,
 } from "./fingerprint";
+export { redactTelemetryString, redactTelemetryValue } from "./redaction";
 
 // =============================================================================
 // Narrow sink interfaces — satisfied by @absolutejs/audit + @absolutejs/telemetry
@@ -623,6 +625,58 @@ const captureErrorCauses = (error: Error): CapturedErrorCause[] => {
   return causes;
 };
 
+const redactError = (error: Error): Error => {
+  const message = redactTelemetryString(error.message);
+  const stack =
+    error.stack === undefined ? undefined : redactTelemetryString(error.stack);
+  if (message === error.message && stack === error.stack) return error;
+  const redacted = new Error(message);
+  redacted.name = error.name;
+  if (stack !== undefined) redacted.stack = stack;
+  return redacted;
+};
+
+const redactErrorCause = (cause: CapturedErrorCause): CapturedErrorCause => ({
+  message: redactTelemetryString(cause.message),
+  name: cause.name,
+  ...(cause.stack !== undefined
+    ? { stack: redactTelemetryString(cause.stack) }
+    : {}),
+  ...(cause.properties !== undefined
+    ? {
+        properties: redactTelemetryValue(cause.properties) as Record<
+          string,
+          unknown
+        >,
+      }
+    : {}),
+});
+
+const redactContext = (context: ErrorContext): ErrorContext => ({
+  ...context,
+  ...(context.groupingKey !== undefined
+    ? { groupingKey: redactTelemetryString(context.groupingKey) }
+    : {}),
+  ...(context.target !== undefined
+    ? { target: redactTelemetryString(context.target) }
+    : {}),
+  ...(context.tags !== undefined
+    ? {
+        tags: Object.fromEntries(
+          Object.entries(context.tags).map(([key, value]) => [
+            key,
+            redactTelemetryValue(value, key),
+          ]),
+        ) as Record<string, string>,
+      }
+    : {}),
+  ...(context.extra !== undefined
+    ? {
+        extra: redactTelemetryValue(context.extra) as Record<string, unknown>,
+      }
+    : {}),
+});
+
 const stackWithCauses = (
   stack: string | undefined,
   causes: CapturedErrorCause[],
@@ -757,14 +811,16 @@ export const createErrorTracker = (
     context: ErrorContext = {},
   ): Effect.Effect<CaptureOutcome> =>
     Effect.gen(function* () {
-      const error = toError(raw);
-      const errorCauses = captureErrorCauses(error);
+      const rawError = toError(raw);
+      const error = redactError(rawError);
+      const errorCauses = captureErrorCauses(rawError).map(redactErrorCause);
+      const redactedContext = redactContext(context);
       const enrichedContext: ErrorContext =
         errorCauses.length === 0
-          ? context
+          ? redactedContext
           : {
-              ...context,
-              extra: { ...context.extra, errorCauses },
+              ...redactedContext,
+              extra: { ...redactedContext.extra, errorCauses },
             };
       const delivered: Record<SinkName, Delivery> = {
         audit: "skipped",
@@ -785,7 +841,7 @@ export const createErrorTracker = (
       const fpResult = yield* Effect.either(
         Effect.tryPromise({
           catch: (cause) => new FingerprintFailure({ cause }),
-          try: () => Promise.resolve(fingerprintFn(error, context)),
+          try: () => Promise.resolve(fingerprintFn(error, redactedContext)),
         }),
       );
       let fingerprint: string;

@@ -247,6 +247,55 @@ describe("capture — basics", () => {
     ]);
   });
 
+  test("redacts database parameters from server errors before every sink", async () => {
+    const store = createMemoryIssueStore();
+    const recorded: unknown[] = [];
+    const tracker = createErrorTracker({
+      store,
+      tracer: {
+        startSpan: () => ({
+          end: () => undefined,
+          recordException: (error) => recorded.push(error),
+        }),
+      },
+    });
+    const driver = Object.assign(new Error("CASE types text[] and record"), {
+      args: ["update tokens", ["secret-hash", "person@example.com"]],
+      code: "42804",
+      parameters: ["secret-hash", "person@example.com"],
+      query: "update tokens set scopes = ($1, $2)",
+    });
+    const queryError = new Error(
+      "Failed query: update tokens set scopes = ($1, $2)\nparams: secret-hash,person@example.com",
+      { cause: driver },
+    );
+    queryError.name = "DrizzleQueryError";
+    queryError.stack = `DrizzleQueryError: ${queryError.message}\n    at rotateToken (store.ts:1:1)`;
+
+    const outcome = await tracker.captureException(queryError, {
+      extra: { refreshToken: "raw-token" },
+    });
+    const [event] = await Effect.runPromise(
+      store.listEvents!("default", outcome.fingerprint),
+    );
+
+    expect(event?.message).toContain("params: [REDACTED]");
+    expect(event?.message).not.toContain("person@example.com");
+    expect(event?.stack).not.toContain("secret-hash");
+    expect(event?.extra?.refreshToken).toBe("[REDACTED]");
+    expect(event?.extra?.errorCauses).toEqual([
+      expect.objectContaining({
+        properties: expect.objectContaining({
+          args: "[REDACTED]",
+          code: "42804",
+          parameters: "[REDACTED]",
+          query: "update tokens set scopes = ($1, $2)",
+        }),
+      }),
+    ]);
+    expect((recorded[0] as Error).message).not.toContain("secret-hash");
+  });
+
   test("preserves cross-realm causes and safely terminates circular chains", async () => {
     const store = createMemoryIssueStore();
     const tracker = createErrorTracker({ store });

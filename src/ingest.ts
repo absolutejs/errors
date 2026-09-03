@@ -25,6 +25,7 @@
  */
 import { Data, Effect, Either, ParseResult, Schema } from "effect";
 import { computeFingerprint } from "./fingerprint";
+import { redactTelemetryString, redactTelemetryValue } from "./redaction";
 import type {
   CoalescedGroup,
   IssueLevel,
@@ -193,104 +194,6 @@ const BeaconEnvelopeSchema = Schema.Struct({
 export type BeaconEvent = typeof BeaconEventSchema.Type;
 export type BeaconEnvelope = typeof BeaconEnvelopeSchema.Type;
 
-const REDACTED = "[REDACTED]";
-const SENSITIVE_KEY_NAMES = new Set([
-  "accesstoken",
-  "apikey",
-  "authorization",
-  "clientsecret",
-  "cookie",
-  "csrftoken",
-  "idtoken",
-  "password",
-  "passwd",
-  "proxyauthorization",
-  "refreshtoken",
-  "secret",
-  "setcookie",
-  "token",
-]);
-const URL_KEY_NAMES = new Set([
-  "endpoint",
-  "errorfilename",
-  "resourceurl",
-  "sourcefile",
-  "url",
-]);
-const normalizeFieldName = (key: string): string =>
-  key.replace(/[^a-z0-9]/gi, "").toLowerCase();
-const isSensitiveField = (key: string): boolean =>
-  SENSITIVE_KEY_NAMES.has(normalizeFieldName(key));
-const isUrlField = (key: string): boolean =>
-  URL_KEY_NAMES.has(normalizeFieldName(key));
-
-const redactUrl = (value: string): string => {
-  try {
-    const absolute = /^[a-z][a-z\d+.-]*:/i.test(value);
-    const url = new URL(value, "https://errors.invalid");
-    url.search = "";
-    url.hash = "";
-    return absolute ? url.toString() : `${url.pathname}`;
-  } catch {
-    return value.replace(/[?#].*$/, "");
-  }
-};
-
-const redactString = (value: string): string =>
-  value
-    .replace(
-      /\b(Bearer)\s+[A-Za-z0-9._~+/-]+=*/gi,
-      (_match, scheme: string) => `${scheme} ${REDACTED}`,
-    )
-    .replace(
-      /([?&](?:access_token|api_?key|authorization|code|id_token|password|refresh_token|secret|token)=)[^&#\s]*/gi,
-      `$1${REDACTED}`,
-    )
-    .replace(
-      /\b((?:access_?token|api_?key|authorization|client_?secret|cookie|id_?token|password|passwd|refresh_?token|secret|token)\s*[:=]\s*)(?!Bearer\b|\[REDACTED\])[^,\s;]+/gi,
-      `$1${REDACTED}`,
-    )
-    .replace(
-      /\beyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\b/g,
-      REDACTED,
-    );
-
-const redactValue = (
-  value: unknown,
-  key: string | undefined,
-  seen: Set<object>,
-  depth = 0,
-): unknown => {
-  if (key !== undefined && isSensitiveField(key)) return REDACTED;
-  if (typeof value === "string") {
-    return redactString(
-      key !== undefined && isUrlField(key) ? redactUrl(value) : value,
-    );
-  }
-  if (
-    value === null ||
-    typeof value === "number" ||
-    typeof value === "boolean"
-  ) {
-    return value;
-  }
-  if (typeof value === "bigint") return String(value);
-  if (typeof value !== "object") return String(value);
-  if (depth >= 12) return "[Truncated]";
-  if (seen.has(value)) return "[Circular]";
-  seen.add(value);
-  const redacted = Array.isArray(value)
-    ? value.map((entry) => redactValue(entry, undefined, seen, depth + 1))
-    : Object.fromEntries(
-        Object.entries(value).map(([field, entry]) => [
-          field,
-          redactValue(entry, field, seen, depth + 1),
-        ]),
-      );
-  seen.delete(value);
-  return redacted;
-};
-
 /**
  * Defense-in-depth redaction for an already schema-validated browser event.
  * The client performs the same pass, but the ingest boundary does not trust it.
@@ -298,26 +201,25 @@ const redactValue = (
 export const redactBeaconEvent = (event: BeaconEvent): BeaconEvent => ({
   ...event,
   ...(event.groupingKey !== undefined
-    ? { groupingKey: redactString(event.groupingKey).slice(0, 200) }
+    ? { groupingKey: redactTelemetryString(event.groupingKey).slice(0, 200) }
     : {}),
-  message: redactString(event.message),
-  ...(event.stack !== undefined ? { stack: redactString(event.stack) } : {}),
+  message: redactTelemetryString(event.message),
+  ...(event.stack !== undefined
+    ? { stack: redactTelemetryString(event.stack) }
+    : {}),
   ...(event.tags !== undefined
     ? {
         tags: Object.fromEntries(
           Object.entries(event.tags).map(([key, value]) => [
             key,
-            redactValue(value, key, new Set()),
+            redactTelemetryValue(value, key),
           ]),
         ) as Record<string, string>,
       }
     : {}),
   ...(event.extra !== undefined
     ? {
-        extra: redactValue(event.extra, undefined, new Set()) as Record<
-          string,
-          unknown
-        >,
+        extra: redactTelemetryValue(event.extra) as Record<string, unknown>,
       }
     : {}),
 });
