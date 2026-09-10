@@ -56,8 +56,10 @@
     "access": "public"
   },
   "files": [
-    "dist",
-    "README.md"
+    "CHANGELOG.md",
+    "README.md",
+    "changelog.json",
+    "dist"
   ],
   "scripts": {
     "build": "rm -rf dist && bun build src/index.ts src/ingest.ts src/reporting.ts src/elysia.ts src/symbolicate.ts src/manifest.ts --outdir dist --sourcemap --target=bun --external @absolutejs/handoff --external effect --external @jridgewell/trace-mapping --external elysia && tsc --project tsconfig.build.json && absolute-manifest emit",
@@ -65,7 +67,7 @@
     "typecheck": "tsc --noEmit",
     "format": "prettier --write \"./**/*.{ts,json,md}\"",
     "verify-package": "absolute-manifest verify-package",
-    "check:package": "bun run typecheck && bun run verify-package && bun run build && bun run test",
+    "check:package": "bun run typecheck && bun run verify-package && bun run build && bun run test && absolute-changelog check",
     "release": "bun run format && bun run check:package && bun publish"
   },
   "keywords": [
@@ -100,6 +102,7 @@
     }
   },
   "devDependencies": {
+    "@absolutejs/changelog": "^0.1.2",
     "@jridgewell/trace-mapping": "0.3.31",
     "@types/bun": "^1.3.14",
     "effect": "3.22.0",
