@@ -68,7 +68,8 @@
     "format": "prettier --write \"./**/*.{ts,json,md}\"",
     "verify-package": "absolute-manifest verify-package",
     "check:package": "bun run typecheck && bun run verify-package && bun run build && bun run test && absolute-changelog check",
-    "release": "bun run format && bun run check:package && bun publish"
+    "release": "bun run format && bun run check:package && bun publish",
+    "prepublishOnly": "absolute-changelog check"
   },
   "keywords": [
     "absolutejs",
@@ -102,7 +103,7 @@
     }
   },
   "devDependencies": {
-    "@absolutejs/changelog": "^0.1.2",
+    "@absolutejs/changelog": "^0.2.0",
     "@jridgewell/trace-mapping": "0.3.31",
     "@types/bun": "^1.3.14",
     "effect": "3.22.0",
