@@ -26,6 +26,16 @@ const firstStackFrame = (stack: string | undefined): string => {
   return "";
 };
 
+// mktemp deployment roots are not part of a call site's identity. Keep the
+// file path beneath the root and leave the original stack/culprit untouched.
+const normalizeStackFrame = (frame: string): string =>
+  stripDigits(
+    frame.replace(
+      /(^|[\s(@]|file:\/\/)\/tmp\/tmp\.[A-Za-z0-9_-]+(?=\/)/gu,
+      "$1/tmp/tmp.<build>",
+    ),
+  );
+
 const normalizeMessage = (message: string): string =>
   stripQuoted(stripDigits(message)).slice(0, 200);
 const displayMessage = (message: string): string =>
@@ -61,7 +71,7 @@ export const fingerprintSeed = (input: {
   return [
     input.name,
     normalizeMessage(input.message ?? ""),
-    stripDigits(firstStackFrame(input.stack)),
+    normalizeStackFrame(firstStackFrame(input.stack)),
   ].join("|");
 };
 
