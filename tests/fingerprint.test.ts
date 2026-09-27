@@ -78,3 +78,47 @@ test("explicit grouping keys and missing stacks retain existing behavior", () =>
     "Error|failed|",
   );
 });
+
+test("native member-call errors group minified receivers while preserving the failed field and source", async () => {
+  const base = {
+    name: "TypeError",
+    message: "U.eventDate?.slice is not a function",
+    stack:
+      "TypeError: failed\n    at filter (src/SubscriptionRenewalReport.vue:34:7)",
+  };
+  const fingerprint = await computeFingerprint(base);
+  expect(
+    await computeFingerprint({
+      ...base,
+      message: "X.eventDate?.slice is not a function",
+    }),
+  ).toBe(fingerprint);
+  expect(
+    await computeFingerprint({
+      ...base,
+      message:
+        "X.eventDate?.slice is not a function. (In 'X.eventDate?.slice(0, 10)', 'X.eventDate?.slice' is undefined)",
+    }),
+  ).toBe(fingerprint);
+  expect(
+    await computeFingerprint({
+      ...base,
+      message: "U.otherDate?.slice is not a function",
+    }),
+  ).not.toBe(fingerprint);
+  expect(
+    await computeFingerprint({
+      ...base,
+      message: "U.eventDate?.localeCompare is not a function",
+    }),
+  ).not.toBe(fingerprint);
+  expect(
+    await computeFingerprint({
+      ...base,
+      stack: "TypeError: failed\n    at filter (src/OtherReport.vue:34:7)",
+    }),
+  ).not.toBe(fingerprint);
+  expect(await computeFingerprint({ ...base, name: "Error" })).not.toBe(
+    fingerprint,
+  );
+});

@@ -36,8 +36,22 @@ const normalizeStackFrame = (frame: string): string =>
     ),
   );
 
-const normalizeMessage = (message: string): string =>
-  stripQuoted(stripDigits(message)).slice(0, 200);
+const normalizeMessage = (name: string, message: string): string => {
+  // Native member-call TypeErrors can rename the receiver with every minified
+  // build. Preserve the property chain and source frame, which identify the
+  // actual failed operation. Safari adds an equivalent explanatory suffix.
+  const memberCall =
+    name === "TypeError"
+      ? /^([A-Za-z_$][\w$]*)(\??\.[A-Za-z_$][\w$]*(?:\??\.[A-Za-z_$][\w$]*)*) is not a function(?:\. \(In .* is undefined\))?$/u.exec(
+          message,
+        )
+      : null;
+  const stable =
+    memberCall === null
+      ? message
+      : `<receiver>${memberCall[2]} is not a function`;
+  return stripQuoted(stripDigits(stable)).slice(0, 200);
+};
 const displayMessage = (message: string): string =>
   stripQuoted(message).slice(0, 200);
 
@@ -70,7 +84,7 @@ export const fingerprintSeed = (input: {
 
   return [
     input.name,
-    normalizeMessage(input.message ?? ""),
+    normalizeMessage(input.name, input.message ?? ""),
     normalizeStackFrame(firstStackFrame(input.stack)),
   ].join("|");
 };

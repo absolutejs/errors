@@ -6,6 +6,20 @@
 			"changes": [
 				{
 					"kind": "fixed",
+					"summary": "Group native member-call TypeErrors across renamed minified receivers and Safari explanatory suffixes while preserving property, method, and source identity. Historical issue IDs are not rewritten.",
+					"symbols": [
+						"computeFingerprint",
+						"fingerprintSeed"
+					]
+				}
+			],
+			"date": "2026-09-27",
+			"version": "0.9.3"
+		},
+		{
+			"changes": [
+				{
+					"kind": "fixed",
 					"summary": "Normalize random /tmp/tmp.* deployment roots in default fingerprints while preserving file and function identity and original stacks. Existing issue IDs are not migrated; affected future captures receive the normalized fingerprint.",
 					"symbols": [
 						"computeFingerprint",
