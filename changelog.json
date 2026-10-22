@@ -5,6 +5,24 @@
 		{
 			"changes": [
 				{
+					"detail": "Elysia 2.0.0-rc.0 renamed every lifecycle hook to its `on` form and removed setup/cleanup (now onStart/onStop). This package now builds and tests against Elysia 2.0.0-rc.0 and requires `elysia ^2.0.0-rc.0`, which also accepts later release candidates and 2.0.0. Its server plugin now registers onRequest, onError and onAfterResponse, and stops its browser-ingest drainer in onStop (cleanup was removed).",
+					"kind": "breaking",
+					"migration": {
+						"instruction": "Upgrade `elysia` and every `@elysia/*` package to 2.0.0-rc.0 or later, then rename lifecycle hooks in your own server: request → onRequest, beforeHandle → onBeforeHandle, afterHandle → onAfterHandle, afterResponse → onAfterResponse, error → onError, parse → onParse, transform → onTransform; setup/cleanup → onStart/onStop. absolutejs/scripts codemods/elysia-rc-hooks.ts does the renames (run it before upgrading Elysia).",
+						"manual": true
+					},
+					"summary": "Requires Elysia 2.0.0-rc.0",
+					"symbols": [
+						"errorsPlugin"
+					]
+				}
+			],
+			"date": "2026-10-22",
+			"version": "0.10.0"
+		},
+		{
+			"changes": [
+				{
 					"kind": "fixed",
 					"summary": "Group native member-call TypeErrors across renamed minified receivers and Safari explanatory suffixes while preserving property, method, and source identity. Historical issue IDs are not rewritten.",
 					"symbols": [

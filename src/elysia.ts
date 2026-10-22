@@ -205,7 +205,7 @@ const mountBrowserIngest = (
     );
   }
 
-  return mounted.cleanup(async () => {
+  return mounted.onStop(async () => {
     await drainer.stop();
   });
 };
@@ -217,7 +217,9 @@ const mountBrowserIngest = (
  * Each section is configured independently through one plugin invocation.
  */
 export const errorsPlugin = (options: ErrorsPluginOptions) => {
-  let app = new Elysia({ name: "@absolutejs/errors" });
+  /* Each mount adds to this one instance in place; reassigning its result
+   * would only narrow the type (a global onError adds error entries). */
+  const app = new Elysia({ name: "@absolutejs/errors" });
 
   if (options.server !== false) {
     const server = options.server ?? {};
@@ -227,7 +229,7 @@ export const errorsPlugin = (options: ErrorsPluginOptions) => {
         "@absolutejs/errors errorsPlugin requires server.capture or tracker when server capture is enabled",
       );
     }
-    app = mountServerErrorBoundary(app, { ...server, capture });
+    mountServerErrorBoundary(app, { ...server, capture });
   }
 
   if (options.ingest !== undefined && options.ingest !== false) {
@@ -237,7 +239,7 @@ export const errorsPlugin = (options: ErrorsPluginOptions) => {
         "@absolutejs/errors errorsPlugin requires ingest.store or a store configured on tracker when ingest is enabled",
       );
     }
-    app = mountBrowserIngest(app, options.ingest, store);
+    mountBrowserIngest(app, options.ingest, store);
   }
 
   return app;

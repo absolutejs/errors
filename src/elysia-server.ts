@@ -195,7 +195,7 @@ export const mountServerErrorBoundary = (
   };
 
   return app
-    .request((rawContext) => {
+    .onRequest((rawContext) => {
       const context = rawContext as unknown as ErrorsServerContext;
       const traceId = options.traceId?.(context) ?? generatedTraceId();
       traces.set(context.request, traceId);
@@ -203,7 +203,7 @@ export const mountServerErrorBoundary = (
         context.set.headers[traceHeader] = traceId;
       }
     })
-    .error("global", async (rawContext) => {
+    .onError("global", async (rawContext) => {
       const context = rawContext as unknown as ErrorsServerContext & {
         error: unknown;
       };
@@ -212,7 +212,7 @@ export const mountServerErrorBoundary = (
       captured.add(context.request);
       await capture(context.error, context, status, "thrown_http_5xx");
     })
-    .afterResponse("global", async (rawContext) => {
+    .onAfterResponse("global", async (rawContext) => {
       const context = rawContext as unknown as ErrorsServerContext & {
         responseValue?: unknown;
       };
