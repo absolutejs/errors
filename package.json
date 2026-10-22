@@ -1,6 +1,6 @@
 {
   "name": "@absolutejs/errors",
-  "version": "0.9.3",
+  "version": "0.10.0",
   "description": "Effect-native, Sentry-equivalent exception capture for the AbsoluteJS substrate. createErrorTracker decorates @absolutejs/audit + @absolutejs/telemetry + a durable issue store; capture() returns a CaptureOutcome with per-sink delivery state + typed (Data.TaggedError) failures — errors-as-values. Plus /ingest (coalescing buffer + Schema-validated endpoint + drainer for browser beacon payloads) and /symbolicate (source-map stack rewriting). No vendor lock-in.",
   "repository": {
     "type": "git",
@@ -92,7 +92,7 @@
   "peerDependencies": {
     "@jridgewell/trace-mapping": ">=0.3.31 <0.4",
     "effect": ">=3.22.0 <4",
-    "elysia": "^2.0.0-beta.6"
+    "elysia": "^2.0.0-rc.0"
   },
   "peerDependenciesMeta": {
     "@jridgewell/trace-mapping": {
@@ -107,7 +107,7 @@
     "@jridgewell/trace-mapping": "0.3.31",
     "@types/bun": "^1.3.14",
     "effect": "3.22.0",
-    "elysia": "2.0.0-beta.6",
+    "elysia": "2.0.0-rc.0",
     "exact-mirror": "1.2.4",
     "prettier": "^3.8.3",
     "typebox": "1.3.16",
