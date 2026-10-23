@@ -3,6 +3,20 @@
 	"name": "@absolutejs/errors",
 	"releases": [
 		{
+			"version": "0.10.1",
+			"date": "2026-10-23",
+			"changes": [
+				{
+					"kind": "fixed",
+					"summary": "Group generated chunk resource failures across build hashes while retaining original event URLs and distinct resource origins, paths, extensions and kinds.",
+					"symbols": [
+						"computeFingerprint",
+						"issueTitle"
+					]
+				}
+			]
+		},
+		{
 			"changes": [
 				{
 					"detail": "Elysia 2.0.0-rc.0 renamed every lifecycle hook to its `on` form and removed setup/cleanup (now onStart/onStop). This package now builds and tests against Elysia 2.0.0-rc.0 and requires `elysia ^2.0.0-rc.0`, which also accepts later release candidates and 2.0.0. Its server plugin now registers onRequest, onError and onAfterResponse, and stops its browser-ingest drainer in onStop (cleanup was removed).",

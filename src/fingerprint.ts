@@ -36,6 +36,25 @@ const normalizeStackFrame = (frame: string): string =>
     ),
   );
 
+// A generated asset hash identifies a build, not a distinct failure. Scope this
+// to browser resource failures; ordinary messages and named files remain distinct.
+const resourceMessage = (name: string, message: string): string => {
+  if (name !== "ResourceLoadError" && name !== "ResourceLoadWarning")
+    return message;
+  return message.replace(/https?:\/\/[^\s]+/gu, (value) => {
+    try {
+      const url = new URL(value);
+      const path = url.pathname.replace(
+        /(^|\/)chunk-[A-Za-z0-9_-]{8,}\.(m?js|css)$/u,
+        "$1chunk-<hash>.$2",
+      );
+      return `${url.origin}${path}`;
+    } catch {
+      return value;
+    }
+  });
+};
+
 const normalizeMessage = (name: string, message: string): string => {
   // Native member-call TypeErrors can rename the receiver with every minified
   // build. Preserve the property chain and source frame, which identify the
@@ -48,7 +67,7 @@ const normalizeMessage = (name: string, message: string): string => {
       : null;
   const stable =
     memberCall === null
-      ? message
+      ? resourceMessage(name, message)
       : `<receiver>${memberCall[2]} is not a function`;
   return stripQuoted(stripDigits(stable)).slice(0, 200);
 };
@@ -63,7 +82,10 @@ const displayMessage = (message: string): string =>
  * errors' internals.
  */
 export const issueTitle = (name: string, message: string): string =>
-  (message === "" ? name : `${name}: ${displayMessage(message)}`).slice(0, 300);
+  (message === ""
+    ? name
+    : `${name}: ${displayMessage(resourceMessage(name, message))}`
+  ).slice(0, 300);
 
 /** Derive an issue culprit (top user stack frame) from a stack trace. */
 export const issueCulprit = (stack: string | undefined): string =>
