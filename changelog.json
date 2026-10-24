@@ -3,8 +3,16 @@
 	"name": "@absolutejs/errors",
 	"releases": [
 		{
-			"version": "0.10.1",
-			"date": "2026-10-23",
+			"changes": [
+				{
+					"kind": "fixed",
+					"summary": "Exclude browser policy reports from extension-protocol scripts while retaining application reports and crashes."
+				}
+			],
+			"date": "2026-10-24",
+			"version": "0.10.2"
+		},
+		{
 			"changes": [
 				{
 					"kind": "fixed",
@@ -14,7 +22,9 @@
 						"issueTitle"
 					]
 				}
-			]
+			],
+			"date": "2026-10-23",
+			"version": "0.10.1"
 		},
 		{
 			"changes": [

@@ -65,3 +65,38 @@ describe("browserReportsEnvelope", () => {
     ).toEqual([]);
   });
 });
+
+test("excludes extension-owned policy reports without hiding first-party paths or crashes", () => {
+  const sources = [
+    "chrome-extension://abc/hooks.js",
+    "moz-extension://abc/hooks.js",
+    "safari-web-extension://abc/hooks.js",
+    "https://app.test/moz-extension/hooks.js",
+    "/moz-extension/hooks.js",
+    "https://app.test/main.js",
+  ];
+  const envelope = browserReportsEnvelope(
+    sources.map((sourceFile) => ({
+      type: "deprecation",
+      url: "https://app.test/",
+      body: { id: "DocumentWrite", sourceFile },
+    })),
+    { project: "app" },
+  );
+  expect(envelope?.events).toHaveLength(3);
+  expect(envelope?.events.map((event) => event.extra?.reportBody)).toEqual(
+    sources.slice(3).map((sourceFile) => ({ id: "DocumentWrite", sourceFile })),
+  );
+  expect(
+    browserReportsEnvelope(
+      [
+        {
+          type: "crash",
+          url: "https://app.test/",
+          body: { sourceFile: sources[0] },
+        },
+      ],
+      { project: "app" },
+    )?.events,
+  ).toHaveLength(1);
+});

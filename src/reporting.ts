@@ -39,6 +39,21 @@ const reportPath = (value: unknown): string => {
   }
 };
 
+/** Extension-origin scripts are outside the application's shipped runtime.
+ * Keep first-party reports even when their URL path merely mentions extensions. */
+const isExtensionSource = (value: unknown): boolean => {
+  if (typeof value !== "string") return false;
+  try {
+    return [
+      "chrome-extension:",
+      "moz-extension:",
+      "safari-web-extension:",
+    ].includes(new URL(value).protocol);
+  } catch {
+    return false;
+  }
+};
+
 const reportEvent = (
   report: BrowserReport,
   receivedAt: number,
@@ -49,6 +64,13 @@ const reportEvent = (
     report.body !== null && typeof report.body === "object"
       ? (report.body as Record<string, unknown>)
       : {};
+  if (
+    ["deprecation", "intervention", "permissions-policy-violation"].includes(
+      type,
+    ) &&
+    isExtensionSource(body.sourceFile)
+  )
+    return null;
   const path = reportPath(report.url);
   const identity = type === "crash" ? path : reportIdentity(type, body);
   const age =
