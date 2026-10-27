@@ -26,11 +26,16 @@ const firstStackFrame = (stack: string | undefined): string => {
   return "";
 };
 
+// A compiled client graph ID is deployment metadata, not the identity of a
+// failure. Keep the browser asset path and raw event evidence unchanged.
+const normalizeClientAssetPath = (path: string): string =>
+  path.replace(/\/_absolute\/assets\/[a-f0-9]{64}(?=\/)/gu, "");
+
 // mktemp deployment roots are not part of a call site's identity. Keep the
 // file path beneath the root and leave the original stack/culprit untouched.
 const normalizeStackFrame = (frame: string): string =>
   stripDigits(
-    frame.replace(
+    normalizeClientAssetPath(frame).replace(
       /(^|[\s(@]|file:\/\/)\/tmp\/tmp\.[A-Za-z0-9_-]+(?=\/)/gu,
       "$1/tmp/tmp.<build>",
     ),
@@ -44,7 +49,7 @@ const resourceMessage = (name: string, message: string): string => {
   return message.replace(/https?:\/\/[^\s]+/gu, (value) => {
     try {
       const url = new URL(value);
-      const path = url.pathname.replace(
+      const path = normalizeClientAssetPath(url.pathname).replace(
         /(^|\/)chunk-[A-Za-z0-9_-]{8,}\.(m?js|css)$/u,
         "$1chunk-<hash>.$2",
       );
@@ -69,7 +74,10 @@ const normalizeMessage = (name: string, message: string): string => {
     memberCall === null
       ? resourceMessage(name, message)
       : `<receiver>${memberCall[2]} is not a function`;
-  return stripQuoted(stripDigits(stable)).slice(0, 200);
+  return stripQuoted(stripDigits(normalizeClientAssetPath(stable))).slice(
+    0,
+    200,
+  );
 };
 const displayMessage = (message: string): string =>
   stripQuoted(message).slice(0, 200);

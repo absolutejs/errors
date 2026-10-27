@@ -42,3 +42,73 @@ test("keeps origins, paths, resource kinds, extensions and ordinary files distin
     await computeFingerprint({ ...failure(urls[0]!), name: "TypeError" }),
   ).not.toBe(keys[0]!);
 });
+
+test("versioned client graphs preserve legacy resource grouping and full evidence", async () => {
+  const original = failure("https://onspark.com/chunk-abcdefgh.js");
+  const keys = await Promise.all(
+    ["a".repeat(64), "b".repeat(64)].map(async (graph) => {
+      const event = failure(
+        `https://onspark.com/_absolute/assets/${graph}/chunk-abcdefgh.js`,
+      );
+      const key = await computeFingerprint(event);
+      expect(event.message).toContain(graph);
+      return key;
+    }),
+  );
+  expect(keys).toEqual([
+    await computeFingerprint(original),
+    await computeFingerprint(original),
+  ]);
+  expect(
+    await computeFingerprint(
+      failure(
+        `https://onspark.com/_absolute/assets/${"c".repeat(64)}/other.js`,
+      ),
+    ),
+  ).not.toBe(keys[0]);
+  expect(
+    await computeFingerprint(
+      failure(
+        `https://onspark.com/customer/${"c".repeat(64)}/chunk-abcdefgh.js`,
+      ),
+    ),
+  ).not.toBe(keys[0]);
+});
+
+test("stack grouping ignores only the reserved graph identifier, leaving culprit evidence intact", async () => {
+  const base = {
+    name: "TypeError",
+    message: "Cannot read properties of undefined",
+  };
+  const legacy = {
+    ...base,
+    stack: "at render (https://onspark.com/vue/indexes/Home.js:10:2)",
+  };
+  const versioned = {
+    ...base,
+    stack: `at render (https://onspark.com/_absolute/assets/${"a".repeat(64)}/vue/indexes/Home.js:10:2)`,
+  };
+  expect(await computeFingerprint(versioned)).toBe(
+    await computeFingerprint(legacy),
+  );
+  expect(versioned.stack).toContain("a".repeat(64));
+});
+
+test("dynamic import failures keep their identity across graph namespaces", async () => {
+  const event = {
+    name: "TypeError",
+    message:
+      "Failed to fetch dynamically imported module: https://onspark.com/chunk-abcdefgh.js",
+  };
+  const versioned = {
+    ...event,
+    message: event.message.replace(
+      "/chunk-",
+      `/_absolute/assets/${"b".repeat(64)}/chunk-`,
+    ),
+  };
+  expect(await computeFingerprint(versioned)).toBe(
+    await computeFingerprint(event),
+  );
+  expect(versioned.message).toContain("b".repeat(64));
+});

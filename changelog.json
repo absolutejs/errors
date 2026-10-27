@@ -6,6 +6,16 @@
 			"changes": [
 				{
 					"kind": "fixed",
+					"summary": "Keep compiled client graph release identifiers out of issue fingerprints while retaining complete event URLs and stacks"
+				}
+			],
+			"date": "2026-10-27",
+			"version": "0.10.3"
+		},
+		{
+			"changes": [
+				{
+					"kind": "fixed",
 					"summary": "Exclude browser policy reports from extension-protocol scripts while retaining application reports and crashes."
 				}
 			],
