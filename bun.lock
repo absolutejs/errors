@@ -10,7 +10,7 @@
         "@sinclair/typebox": "^0.34.0",
       },
       "devDependencies": {
-        "@absolutejs/changelog": "^0.8.0",
+        "@absolutejs/changelog": "^0.9.0",
         "@jridgewell/trace-mapping": "0.3.31",
         "@types/bun": "^1.3.14",
         "effect": "3.22.0",
@@ -32,7 +32,7 @@
     },
   },
   "packages": {
-    "@absolutejs/changelog": ["@absolutejs/changelog@0.8.0", "", { "dependencies": { "typescript": "^5.8.3" }, "bin": { "absolute-changelog": "dist/cli.js" } }, "sha512-w2WyNBaEU9BRfhOKD0vzJtmmZCVj1s0dXZY7IYO+lz9pTo3qoPDv0TCtsEW1l3jx3X5LunOZp4rft9va3kvlvA=="],
+    "@absolutejs/changelog": ["@absolutejs/changelog@0.9.0", "", { "dependencies": { "typescript": "^5.8.3" }, "bin": { "absolute-changelog": "dist/cli.js" } }, "sha512-O7h4y+9Cs2Rt/HPpIGJcyd7bWUGQpb5t5vFVULLhY7Zzqq6OcraOq7AvJevKeFnf27JPefqKhQdbJx6eDJpnOw=="],
 
     "@absolutejs/handoff": ["@absolutejs/handoff@0.1.0", "", { "dependencies": { "@absolutejs/manifest": "0.7.2", "@sinclair/typebox": "0.34.52" } }, "sha512-P9Wr2oyYBcj7mriCV4h9zRlLGijee/7DW8USVkl/m4ovql7zpITy547jy6j8+HC5v5Ocs+TVcMYmrROEEBupNg=="],
 
