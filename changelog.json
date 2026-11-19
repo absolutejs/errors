@@ -5,6 +5,17 @@
 		{
 			"changes": [
 				{
+					"detail": "The Elysia 2.0.0-rc.0 note is now entries a project can have applied: Elysia and every `@elysia/*` move to `^2.0.0-rc.0`, and every lifecycle hook called on an Elysia app is renamed to its `on` name. Only `setup`/`cleanup` becoming `onStart`/`onStop` is still for a person, since they now run at a different moment.",
+					"kind": "changed",
+					"summary": "Upgrading past Elysia 2.0.0-rc.0 can be applied rather than followed by hand"
+				}
+			],
+			"date": "2026-11-19",
+			"version": "0.10.4"
+		},
+		{
+			"changes": [
+				{
 					"kind": "fixed",
 					"summary": "Keep compiled client graph release identifiers out of issue fingerprints while retaining complete event URLs and stacks"
 				}
@@ -42,10 +53,52 @@
 					"detail": "Elysia 2.0.0-rc.0 renamed every lifecycle hook to its `on` form and removed setup/cleanup (now onStart/onStop). This package now builds and tests against Elysia 2.0.0-rc.0 and requires `elysia ^2.0.0-rc.0`, which also accepts later release candidates and 2.0.0. Its server plugin now registers onRequest, onError and onAfterResponse, and stops its browser-ingest drainer in onStop (cleanup was removed).",
 					"kind": "breaking",
 					"migration": {
-						"instruction": "Upgrade `elysia` and every `@elysia/*` package to 2.0.0-rc.0 or later, then rename lifecycle hooks in your own server: request → onRequest, beforeHandle → onBeforeHandle, afterHandle → onAfterHandle, afterResponse → onAfterResponse, error → onError, parse → onParse, transform → onTransform; setup/cleanup → onStart/onStop. absolutejs/scripts codemods/elysia-rc-hooks.ts does the renames (run it before upgrading Elysia).",
-						"manual": true
+						"dependencies": {
+							"names": [
+								"elysia",
+								"@elysia/*"
+							],
+							"range": "^2.0.0-rc.0"
+						},
+						"instruction": "Upgrade `elysia` and every `@elysia/*` package to 2.0.0-rc.0 or later 2.x."
 					},
 					"summary": "Requires Elysia 2.0.0-rc.0",
+					"symbols": [
+						"errorsPlugin"
+					]
+				},
+				{
+					"kind": "breaking",
+					"migration": {
+						"instruction": "Rename Elysia's lifecycle hooks to their `on` names: `.request()` → `.onRequest()`, `.beforeHandle()` → `.onBeforeHandle()`, `.afterHandle()` → `.onAfterHandle()`, `.afterResponse()` → `.onAfterResponse()`, `.error()` → `.onError()`, `.parse()` → `.onParse()`, `.transform()` → `.onTransform()`.",
+						"methods": {
+							"owner": {
+								"export": "Elysia",
+								"module": "elysia"
+							},
+							"renames": {
+								"request": "onRequest",
+								"beforeHandle": "onBeforeHandle",
+								"afterHandle": "onAfterHandle",
+								"afterResponse": "onAfterResponse",
+								"error": "onError",
+								"parse": "onParse",
+								"transform": "onTransform"
+							}
+						}
+					},
+					"summary": "Elysia's lifecycle hooks use their `on` names",
+					"symbols": [
+						"errorsPlugin"
+					]
+				},
+				{
+					"kind": "breaking",
+					"migration": {
+						"instruction": "Replace `.setup()` with `.onStart()` and `.cleanup()` with `.onStop()`: they now run when the server starts and stops. Check what yours do, since they no longer run at the same moment.",
+						"manual": true
+					},
+					"summary": "Elysia's `setup` and `cleanup` hooks are `onStart` and `onStop`",
 					"symbols": [
 						"errorsPlugin"
 					]
