@@ -5,6 +5,16 @@
 		{
 			"changes": [
 				{
+					"kind": "fixed",
+					"summary": "Preserve bounded native WebKit member-access expressions in issue titles and fingerprints without exposing quoted data."
+				}
+			],
+			"date": "2026-11-21",
+			"version": "0.10.6"
+		},
+		{
+			"changes": [
+				{
 					"detail": "The note that Elysia's `setup`/`cleanup` are `onStart`/`onStop` now reaches only projects that call `.setup()` or `.cleanup()` on an Elysia app, instead of every project that imports this package.",
 					"kind": "changed",
 					"summary": "The Elysia setup and cleanup note reaches only the projects that call them"

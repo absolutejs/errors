@@ -304,3 +304,12 @@ domain-specific grouping rules.
 BSL-1.1 with a named carveout against hosted error-tracking SaaS
 (Sentry, Bugsnag, Rollbar, Honeybadger, Airbrake, Datadog Error
 Tracking). See `LICENSE`. Change date: **2030-05-31** → Apache 2.0.
+
+Native WebKit `TypeError` messages retain bounded static member-access expressions
+in issue titles and fingerprints. For example, missing `window.__firefox__.reader`
+and missing `window.ethereum.selectedAddress` no longer collapse into one quoted
+placeholder. Quoted values, computed keys, function calls and arbitrary evaluated
+source remain redacted. This improves diagnosis; it does not classify browser
+injections or suppress application errors. Existing stored issues are not migrated,
+and these signatures can create new issues after upgrade. Explicit `groupingKey`
+behavior is unchanged.

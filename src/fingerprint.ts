@@ -60,7 +60,25 @@ const resourceMessage = (name: string, message: string): string => {
   });
 };
 
+// Only native member-access syntax is safe to retain. Never preserve quoted
+// literals, computed keys, calls, URLs or arbitrary evaluated source.
+const nativeMemberAccess = (
+  name: string,
+  message: string,
+): string | undefined => {
+  if (name !== "TypeError" || message.length > 240) return undefined;
+  const match =
+    /^(undefined|null) is not an object \(evaluating '([A-Za-z_$][\w$]*(?:\??\.[A-Za-z_$][\w$]*){1,8}(?: = undefined)?)'\)$/u.exec(
+      message,
+    );
+  return match === null
+    ? undefined
+    : `${match[1]} is not an object (evaluating ${match[2]})`;
+};
+
 const normalizeMessage = (name: string, message: string): string => {
+  const native = nativeMemberAccess(name, message);
+  if (native !== undefined) return native;
   // Native member-call TypeErrors can rename the receiver with every minified
   // build. Preserve the property chain and source frame, which identify the
   // actual failed operation. Safari adds an equivalent explanatory suffix.
@@ -92,7 +110,7 @@ const displayMessage = (message: string): string =>
 export const issueTitle = (name: string, message: string): string =>
   (message === ""
     ? name
-    : `${name}: ${displayMessage(resourceMessage(name, message))}`
+    : `${name}: ${nativeMemberAccess(name, message) ?? displayMessage(resourceMessage(name, message))}`
   ).slice(0, 300);
 
 /** Derive an issue culprit (top user stack frame) from a stack trace. */
