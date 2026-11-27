@@ -1,6 +1,6 @@
 {
   "name": "@absolutejs/errors",
-  "version": "0.10.6",
+  "version": "0.11.0",
   "description": "Effect-native, Sentry-equivalent exception capture for the AbsoluteJS substrate. createErrorTracker decorates @absolutejs/audit + @absolutejs/telemetry + a durable issue store; capture() returns a CaptureOutcome with per-sink delivery state + typed (Data.TaggedError) failures — errors-as-values. Plus /ingest (coalescing buffer + Schema-validated endpoint + drainer for browser beacon payloads) and /symbolicate (source-map stack rewriting). No vendor lock-in.",
   "repository": {
     "type": "git",
@@ -45,6 +45,11 @@
       "import": "./dist/symbolicate.js",
       "default": "./dist/symbolicate.js"
     },
+    "./redact": {
+      "types": "./dist/redaction.d.ts",
+      "import": "./dist/redaction.js",
+      "default": "./dist/redaction.js"
+    },
     "./manifest": {
       "types": "./dist/manifest.d.ts",
       "import": "./dist/manifest.js",
@@ -62,7 +67,7 @@
     "dist"
   ],
   "scripts": {
-    "build": "rm -rf dist && bun build src/index.ts src/ingest.ts src/reporting.ts src/elysia.ts src/symbolicate.ts src/manifest.ts --outdir dist --sourcemap --target=bun --external @absolutejs/handoff --external effect --external @jridgewell/trace-mapping --external elysia && tsc --project tsconfig.build.json && absolute-manifest emit",
+    "build": "rm -rf dist && bun build src/index.ts src/ingest.ts src/reporting.ts src/elysia.ts src/symbolicate.ts src/manifest.ts src/redaction.ts --outdir dist --sourcemap --target=bun --external @absolutejs/handoff --external effect --external @jridgewell/trace-mapping --external elysia && tsc --project tsconfig.build.json && absolute-manifest emit",
     "test": "bun test tests/",
     "typecheck": "tsc --noEmit",
     "format": "prettier --write \"./**/*.{ts,json,md}\"",

@@ -5,6 +5,17 @@
 		{
 			"changes": [
 				{
+					"detail": "`redactTelemetryString` and `redactTelemetryValue` were only exported from the package root, which loads Effect and the tracker. An app module that only scrubs what it logs (onSpark's capture helpers, reached by most of its backend) paid about a second to import them, in every test file. `@absolutejs/errors/redact` exports just those two and imports nothing.",
+					"kind": "added",
+					"summary": "`@absolutejs/errors/redact`: the redaction helpers without the tracker"
+				}
+			],
+			"date": "2026-11-27",
+			"version": "0.11.0"
+		},
+		{
+			"changes": [
+				{
 					"kind": "fixed",
 					"summary": "Preserve bounded native WebKit member-access expressions in issue titles and fingerprints without exposing quoted data."
 				}
